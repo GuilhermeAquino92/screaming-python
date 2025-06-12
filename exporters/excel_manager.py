@@ -4,6 +4,7 @@ from exporters.sheets.resumo_sheet import ResumoSheet
 from exporters.sheets.status_http_sheet import StatusHTTPSheet
 from exporters.sheets.metatags_sheet import MetatagsSheet
 from exporters.sheets.headings_sheet import HeadingsSheet
+from exporters.sheets.headings_vazios_sheet import HeadingsVaziosSheet  # 🆕 NOVA IMPORTAÇÃO
 from exporters.sheets.http_inseguro_sheet import HTTPInseguroSheet
 from exporters.sheets.auditoria_sheets import AuditoriaSheets
 from exporters.sheets.errors_sheet import ErrorsSheet
@@ -13,13 +14,20 @@ def exportar_relatorio_completo(df, df_http, auditorias, output_path):
     writer = pd.ExcelWriter(output_path, engine="xlsxwriter")
     writer.book.default_url_format = writer.book.add_format({'font_color': 'black', 'underline': False})
 
+    # Abas originais
     ResumoSheet(df, writer).export()
     StatusHTTPSheet(df, writer).export()
     MetatagsSheet(df, writer).export()
     HeadingsSheet(df, writer).export()
+    
+    # 🆕 NOVA ABA: Headings Vazios Detalhados
+    HeadingsVaziosSheet(df, writer).export()
+    
+    # Abas restantes
     HTTPInseguroSheet(df_http, writer).export()
     AuditoriaSheets(df, auditorias, writer).export()
     ErrorsSheet(auditorias.get("df_errors", pd.DataFrame()), writer).export()
 
     writer.close()
     print(f"✅ Relatório exportado para: {output_path}")
+    print(f"🆕 Nova aba 'Headings_Vazios' incluída com detalhes por tag e posição!")

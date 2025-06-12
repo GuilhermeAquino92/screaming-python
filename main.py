@@ -23,7 +23,7 @@ MAX_DEPTH = 3     # Nova configuração para profundidade
 USE_SELENIUM_SE_ERRO = True
 FORCAR_REINDEXACAO = False
 PASTA_SAIDA = "output"
-ARQUIVO_SAIDA = os.path.join(PASTA_SAIDA, "urls_com_status.xlsx")
+ARQUIVO_SAIDA = os.path.join(PASTA_SAIDA, "urls_com_status_novo.xlsx")
 os.makedirs(PASTA_SAIDA, exist_ok=True)
 
 # ====================
