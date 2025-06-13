@@ -1,4 +1,4 @@
-# validador_headings.py - COM DETECÇÃO DE CSS QUE OCULTA ELEMENTOS
+# validador_headings_CORRIGIDO.py - Corrige problemas de detecção
 
 import requests
 from bs4 import BeautifulSoup
@@ -254,13 +254,32 @@ def validar_headings_em_url(url):
         headings_vazios_count = 0
         headings_ocultos_count = 0
         
+        # 🔥 CORREÇÃO 1: MODO MAIS AGRESSIVO DE DETECÇÃO
+        # Busca TODOS os headings, incluindo vazios e com apenas espaços
         for i in range(1, 7):
+            # 🚀 MUDANÇA: find_all SEM filtros - pega TUDO
             tags_heading = soup.find_all(f"h{i}")
             posicao_geral = 0
             
             for tag in tags_heading:
                 posicao_geral += 1
-                texto = tag.get_text(strip=True)
+                
+                # 🔥 CORREÇÃO 2: Análise mais detalhada do conteúdo
+                # Pega texto bruto primeiro
+                texto_bruto = tag.get_text()  # SEM strip() inicial
+                texto_limpo = texto_bruto.strip() if texto_bruto else ""
+                
+                # Análise mais rigorosa do que constitui "vazio"
+                tem_texto_util = False
+                
+                if texto_limpo:
+                    # Verifica se tem texto útil (não apenas espaços/caracteres especiais)
+                    texto_sem_espacos = re.sub(r'\s+', '', texto_limpo)
+                    if texto_sem_espacos and len(texto_sem_espacos) > 0:
+                        # Verifica se não é apenas caracteres especiais
+                        texto_alfanumerico = re.sub(r'[^\w\s]', '', texto_sem_espacos, flags=re.UNICODE)
+                        if texto_alfanumerico and len(texto_alfanumerico) > 0:
+                            tem_texto_util = True
                 
                 # 🔥 ANALISA CSS OCULTAÇÃO (para todos os headings)
                 analise_css = analisar_css_ocultacao(tag, css_global)
@@ -278,13 +297,13 @@ def validar_headings_em_url(url):
                 
                 atributos_str = ' '.join(atributos_heading) if atributos_heading else 'sem atributos'
                 
-                # 🔥 HEADING VAZIO
-                if not texto:
+                # 🔥 CORREÇÃO 3: CRITÉRIO MAIS AMPLO PARA "VAZIO"
+                if not tem_texto_util:  # Mudou de "not texto" para "not tem_texto_util"
                     headings_vazios_count += 1
                     
                     # Adiciona informação de CSS se estiver oculto também
-                    motivos = ['Vazio']
-                    descricao_completa = f'H{i} vazio: {contexto_pai}'
+                    motivos = ['Vazio/Sem conteúdo útil']  # Descrição mais clara
+                    descricao_completa = f'H{i} vazio/sem conteúdo: {contexto_pai}'
                     
                     if analise_css['tem_ocultacao']:
                         motivos.append('Oculto por CSS')
@@ -302,9 +321,10 @@ def validar_headings_em_url(url):
                         'atributos_heading': atributos_str,
                         'descricao': f'H{i} vazio na posição {posicao_geral}',
                         'descricao_completa': descricao_completa,
-                        'texto': '',
+                        'texto': texto_bruto[:100] if texto_bruto else '',  # Mostra texto bruto
+                        'texto_limpo': texto_limpo[:100] if texto_limpo else '',  # Adiciona texto limpo
                         'motivos': motivos,
-                        'gravidade': 'CRÍTICO' if i == 1 else 'MÉDIO',
+                        'gravidade': 'CRITICO' if i == 1 else 'MEDIO',
                         # 🆕 DADOS CSS
                         'css_oculto': analise_css['tem_ocultacao'],
                         'css_problemas': analise_css['problemas_css'],
@@ -335,9 +355,9 @@ def validar_headings_em_url(url):
                         'atributos_heading': atributos_str,
                         'descricao': f'H{i} oculto por CSS na posição {posicao_geral}',
                         'descricao_completa': descricao_completa,
-                        'texto': texto[:100] + ('...' if len(texto) > 100 else ''),  # Limita o texto
+                        'texto': texto_limpo[:100] + ('...' if len(texto_limpo) > 100 else ''),
                         'motivos': motivos,
-                        'gravidade': 'ALTO' if i == 1 else 'MÉDIO',
+                        'gravidade': 'ALTO' if i == 1 else 'MEDIO',
                         # 🆕 DADOS CSS
                         'css_oculto': analise_css['tem_ocultacao'],
                         'css_problemas': analise_css['problemas_css'],
@@ -406,9 +426,9 @@ def validar_headings_em_url(url):
         }
 
 def validar_headings(lista_urls, max_threads=30):
-    print(f"🔄 Validando headings (com detecção de CSS oculto) com até {max_threads} threads...")
+    print(f"🔄 Validando headings (CORRIGIDO - mais agressivo) com até {max_threads} threads...")
     with ThreadPoolExecutor(max_workers=max_threads) as executor:
-        resultados = list(tqdm(executor.map(validar_headings_em_url, lista_urls), total=len(lista_urls), desc="🧠 Headings + CSS"))
+        resultados = list(tqdm(executor.map(validar_headings_em_url, lista_urls), total=len(lista_urls), desc="🧠 Headings CORRIGIDO"))
     
     # 🆕 Log estatísticas ATUALIZADAS
     total_vazios = sum(r.get('headings_vazios_count', 0) for r in resultados)
@@ -417,7 +437,7 @@ def validar_headings(lista_urls, max_threads=30):
     urls_com_ocultos = len([r for r in resultados if r.get('tem_headings_ocultos', False)])
     
     if total_vazios > 0:
-        print(f"🕳️ Detectados {total_vazios} headings vazios em {urls_com_vazios} URLs")
+        print(f"🕳️ CORRIGIDO: Detectados {total_vazios} headings vazios em {urls_com_vazios} URLs")
     
     if total_ocultos > 0:
         print(f"🕵️ Detectados {total_ocultos} headings OCULTOS POR CSS em {urls_com_ocultos} URLs")
@@ -426,89 +446,3 @@ def validar_headings(lista_urls, max_threads=30):
         print(f"✅ Nenhum heading vazio ou oculto por CSS encontrado")
     
     return resultados
-
-
-# 🧪 Função de teste para verificar detecção de CSS
-def testar_deteccao_css():
-    """Testa a detecção de CSS que oculta elementos"""
-    print("🧪 Testando detecção de CSS que oculta headings...")
-    
-    # HTML de teste com diferentes tipos de ocultação CSS
-    html_test = """
-    <html>
-    <head>
-        <style>
-            .hidden { display: none; }
-            .invisible { visibility: hidden; }
-            .white-text { color: white; }
-            .sr-only { position: absolute; left: -10000px; }
-            #hidden-header { display: none; }
-        </style>
-    </head>
-    <body>
-        <div class="main-content">
-            <h1>Título Principal Visível</h1>
-            
-            <!-- HEADING VAZIO -->
-            <h2></h2>
-            
-            <!-- HEADING OCULTO POR CSS INLINE -->
-            <h2 style="display: none;">Heading oculto por display none</h2>
-            
-            <!-- HEADING OCULTO POR CLASSE CSS -->
-            <h3 class="hidden">Heading oculto por classe</h3>
-            
-            <!-- HEADING OCULTO POR ID CSS -->
-            <h4 id="hidden-header">Heading oculto por ID</h4>
-            
-            <!-- HEADING COM COR INVISÍVEL -->
-            <h5 style="color: white;">Heading com cor branca</h5>
-            
-            <!-- HEADING EM CONTAINER OCULTO -->
-            <div style="display: none;">
-                <h6>Heading em div oculta</h6>
-            </div>
-            
-            <!-- HEADING COM CLASSE SUSPEITA -->
-            <h2 class="sr-only">Screen reader only</h2>
-            
-            <!-- HEADING NORMAL -->
-            <h3>Heading normal e visível</h3>
-        </div>
-    </body>
-    </html>
-    """
-    
-    soup = BeautifulSoup(html_test, 'html.parser')
-    css_global = """
-        .hidden { display: none; }
-        .invisible { visibility: hidden; }
-        .white-text { color: white; }
-        .sr-only { position: absolute; left: -10000px; }
-        #hidden-header { display: none; }
-    """
-    
-    print(f"🎯 Testando detecção de CSS em diferentes cenários:")
-    
-    # Testa todos os headings
-    for i in range(1, 7):
-        tags = soup.find_all(f"h{i}")
-        for idx, tag in enumerate(tags):
-            texto = tag.get_text(strip=True)
-            analise_css = analisar_css_ocultacao(tag, css_global)
-            analise_pai = analisar_css_pai(tag, css_global)
-            
-            print(f"\n  H{i} #{idx+1}: '{texto[:30]}{'...' if len(texto) > 30 else ''}'")
-            print(f"    Vazio: {'SIM' if not texto else 'NÃO'}")
-            print(f"    CSS Oculto: {'SIM' if analise_css['tem_ocultacao'] else 'NÃO'}")
-            if analise_css['tem_ocultacao']:
-                print(f"    Problemas CSS: {analise_css['problemas_css']}")
-            print(f"    Pai Oculto: {'SIM' if analise_pai['pai_oculto'] else 'NÃO'}")
-            if analise_pai['pai_oculto']:
-                print(f"    Problemas Pai: {analise_pai['motivos_pai']}")
-    
-    print(f"\n✅ Teste de detecção CSS concluído")
-
-
-if __name__ == "__main__":
-    testar_deteccao_css()
