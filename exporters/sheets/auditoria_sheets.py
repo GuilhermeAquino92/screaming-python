@@ -1,6 +1,6 @@
 import pandas as pd
 from exporters.base_exporter import BaseSheetExporter
-from exporters.sheets.title_ausente_sheet import TitleAusenteSheet  # 🆕 Nova aba otimizada
+from exporters.sheets.title_ausente_sheet import TitleAusenteSheetSemantico  # 🆕 Nova aba otimizada
 
 class AuditoriaSheets(BaseSheetExporter):
     def __init__(self, df, auditorias, writer):
@@ -12,7 +12,7 @@ class AuditoriaSheets(BaseSheetExporter):
         
         # 🆕 ABA TITLE AUSENTE OTIMIZADA (substitui a versão antiga)
         print("📋 Gerando aba Title_Ausente otimizada...")
-        title_ausente_sheet = TitleAusenteSheet(self.df, self.writer)
+        title_ausente_sheet = TitleAusenteSheetSemantico(self.df, self.writer)
         title_ausente_sheet.export()
         
         # 📋 ABAS RESTANTES (versão original mantida)

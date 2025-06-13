@@ -10,6 +10,7 @@ import warnings
 import os
 import pickle
 
+
 warnings.filterwarnings("ignore")
 
 # 🎯 Detecta se Playwright está disponível

@@ -1,7 +1,8 @@
-# crawler_playwright.py - Enterprise SEO Crawler com Playwright
+# crawler_playwright.py - Enterprise SEO Crawler com URLManager SEO Integrado
 
 import asyncio
 from playwright.async_api import async_playwright, Browser, BrowserContext, Page
+from playwright._impl._errors import TimeoutError as PlaywrightTimeoutError
 from urllib.parse import urljoin, urlparse
 from tqdm.asyncio import tqdm
 import time
@@ -13,10 +14,13 @@ import json
 from typing import List, Dict, Optional, Tuple
 import logging
 
+# 🆕 IMPORT DO URL MANAGER SEO
+from url_manager_seo import URLManagerSEO
+
 warnings.filterwarnings("ignore")
 
 # ========================
-# 🎯 Configurações Enterprise
+# 🎯 Configurações Enterprise (MANTÉM SEU CÓDIGO ORIGINAL)
 # ========================
 
 class PlaywrightConfig:
@@ -44,7 +48,7 @@ class PlaywrightConfig:
     ]
 
 # ========================
-# 🧠 Detecção Inteligente de Sites
+# 🧠 Detecção Inteligente de Sites (MANTÉM SEU CÓDIGO)
 # ========================
 
 class SiteAnalyzer:
@@ -125,7 +129,7 @@ class SiteAnalyzer:
             return True, f"Erro na detecção, usando JS por segurança: {str(e)}"
 
 # ========================
-# 🚀 Browser Pool Manager
+# 🚀 Browser Pool Manager (MANTÉM SEU CÓDIGO ORIGINAL)
 # ========================
 
 class BrowserPool:
@@ -207,7 +211,7 @@ class BrowserPool:
                 pass
 
 # ========================
-# 🎯 Processador de URL Individual
+# 🎯 Processador de URL Individual (SEU CÓDIGO + TITLE V5)
 # ========================
 
 async def processar_url_playwright(
@@ -238,11 +242,15 @@ async def processar_url_playwright(
             )
         
         # 🚀 Navegação com otimizações
-        response = await page.goto(
-            url,
-            wait_until='domcontentloaded',  # Mais rápido que 'load'
-            timeout=config.NAVIGATION_TIMEOUT
-        )
+        try:
+            response = await page.goto(
+                url,
+                wait_until='domcontentloaded',  # Mais rápido que 'load'
+                timeout=config.NAVIGATION_TIMEOUT
+            )
+        except PlaywrightTimeoutError as e:
+            print(f"⚠️ Timeout na navegação: {url}")
+            response = None
         
         # ⏱️ Aguarda estabilização (crítico para SEO)
         if config.WAIT_FOR_NETWORK_IDLE:
@@ -275,7 +283,7 @@ async def processar_url_playwright(
             # 📊 Dados originais mantidos
             "url": url,
             "nivel": nivel,
-            "status_code": response.status if response else None,
+            "status_code_http": response.status if response else None,
             "tipo_conteudo": response.headers.get("content-type", "unknown") if response else "unknown",
             
             # 🆕 Dados enterprise
@@ -298,7 +306,7 @@ async def processar_url_playwright(
         return {
             "url": url,
             "nivel": nivel,
-            "status_code": None,
+            "status_code_http": None,
             "tipo_conteudo": f"Erro Playwright: {str(e)}",
             "response_time": (time.time() - start_time) * 1000,
             "needs_javascript": True,
@@ -311,15 +319,15 @@ async def processar_url_playwright(
             await browser_pool.release_page(page)
 
 # ========================
-# 🎯 Extração de Dados SEO
+# 🎯 Extração de Dados SEO (COM TITLE V5 INTEGRADO)
 # ========================
 
 async def extrair_dados_seo_completos(page: Page, url: str, nivel: int) -> Dict:
-    """🎯 Extrai todos os dados SEO da página renderizada"""
+    """🎯 Extrai todos os dados SEO da página renderizada com Title V5"""
     
     try:
-        # 🎯 Title (pós-JS)
-        title = await page.title()
+        # 🚀 TITLE V5 - Sistema semântico avançado
+        title = await capturar_title_robusto_v5(page)
         
         # 📋 Meta description
         description_elem = await page.query_selector('meta[name="description"], meta[property="og:description"]')
@@ -393,6 +401,7 @@ async def extrair_dados_seo_completos(page: Page, url: str, nivel: int) -> Dict:
         }
         
     except Exception as e:
+        print(f"❌ Erro extraindo dados SEO de {url}: {e}")
         return {
             "title": "",
             "description": "",
@@ -403,7 +412,206 @@ async def extrair_dados_seo_completos(page: Page, url: str, nivel: int) -> Dict:
         }
 
 # ========================
-# 🔗 Extração de Links
+# 🚀 TITLE V5 - Sistema Semântico Completo
+# ========================
+
+async def capturar_title_robusto_v5(page: Page) -> str:
+    """🎯 Title Capture V5 - Sistema Semântico com Blacklist Inteligente"""
+    
+    try:
+        # 1️⃣ CAPTURA INICIAL ROBUSTA
+        title = await _capturar_title_basico(page)
+        
+        # 2️⃣ FILTRO SEMÂNTICO V5 - Blacklist de titles inúteis
+        title_processado = _aplicar_filtro_semantico_v5(title)
+        
+        # 3️⃣ FALLBACK INTELIGENTE se title for inútil
+        if _title_e_inutel(title_processado):
+            title_alternativo = await _buscar_title_alternativo(page)
+            if title_alternativo and not _title_e_inutel(title_alternativo):
+                print(f"   🔄 Title alternativo usado: '{title_alternativo[:50]}...'")
+                return title_alternativo
+        
+        # 🔍 LOG FINAL
+        if title_processado:
+            print(f"   ✅ Title V5 capturado: '{title_processado[:50]}{'...' if len(title_processado) > 50 else ''}'")
+        else:
+            print("   ❌ Title permanece vazio após V5")
+        
+        return title_processado
+        
+    except Exception as e:
+        print(f"   ❌ Erro crítico Title V5: {e}")
+        return ""
+
+async def _capturar_title_basico(page: Page) -> str:
+    """🎯 Captura básica robusta"""
+    
+    # Estratégia 1: Wait for function
+    try:
+        await page.wait_for_function(
+            "document.title && document.title.trim().length > 0", 
+            timeout=5000
+        )
+    except:
+        pass
+    
+    # Estratégia 2: Title API
+    title = await page.title()
+    
+    # Estratégia 3: DOM direto
+    if not title or title.strip() == "":
+        try:
+            title_element = await page.query_selector('title')
+            if title_element:
+                title = await title_element.inner_text()
+        except:
+            pass
+    
+    # Estratégia 4: SPA wait + evaluate
+    if not title or title.strip() == "" or title.lower() in ['loading', 'carregando', 'app']:
+        try:
+            await page.wait_for_timeout(2000)
+            title = await page.title()
+            
+            if not title or title.strip() == "":
+                title = await page.evaluate("document.title")
+        except:
+            pass
+    
+    return title.strip() if title else ""
+
+def _aplicar_filtro_semantico_v5(title: str) -> str:
+    """🎯 Filtro Semântico V5 - Remove titles inúteis renderizados"""
+    
+    if not title:
+        return ""
+    
+    title_clean = title.strip()
+    title_lower = title_clean.lower()
+    
+    # 🚫 BLACKLIST V5 - Titles inúteis pós-renderização
+    blacklist_titles = {
+        # Estados de loading
+        'loading', 'carregando', 'loading...', 'carregando...',
+        'aguarde', 'wait', 'please wait', 'por favor aguarde',
+        
+        # Apps genéricos
+        'app', 'react app', 'vue app', 'angular app', 'next app',
+        'nextjs app', 'nuxt app', 'gatsby app',
+        
+        # Placeholders técnicos
+        'apisanitizer', 'sanitizer', 'api', 'index', 'main',
+        'default', 'untitled', 'document', 'new document',
+        
+        # Estados de erro
+        'error', 'erro', 'not found', 'página não encontrada',
+        '404', '500', 'server error', 'erro do servidor',
+        
+        # CMS defaults
+        'wordpress', 'wp', 'drupal', 'joomla', 'cms',
+        'admin', 'dashboard', 'painel',
+        
+        # Desenvolvimento
+        'localhost', 'development', 'dev', 'test', 'teste',
+        'staging', 'beta', 'alpha', 'demo',
+        
+        # Genéricos extremos
+        'page', 'página', 'site', 'website', 'web site',
+        'home', 'início', 'inicial', 'principal'
+    }
+    
+    # Verifica blacklist exata
+    if title_lower in blacklist_titles:
+        print(f"   🚫 Title blacklisted: '{title_clean}'")
+        return ""
+    
+    # Verifica padrões suspeitos
+    if len(title_clean) < 3:
+        print(f"   🚫 Title muito curto: '{title_clean}'")
+        return ""
+    
+    if not any(c.isalpha() for c in title_clean):
+        print(f"   🚫 Title sem letras: '{title_clean}'")
+        return ""
+    
+    palavras_suspeitas = ['undefined', 'null', 'nan', '[object object]', 'typeof']
+    if any(palavra in title_lower for palavra in palavras_suspeitas):
+        print(f"   🚫 Title com JS artifacts: '{title_clean}'")
+        return ""
+    
+    if any(char in title_clean for char in ['/', '\\', 'http://', 'https://']):
+        print(f"   🚫 Title parece URL: '{title_clean}'")
+        return ""
+    
+    return title_clean
+
+def _title_e_inutel(title: str) -> bool:
+    """🔍 Verifica se title é inútil"""
+    if not title or len(title.strip()) < 3:
+        return True
+    
+    title_lower = title.lower().strip()
+    
+    titles_inuteis = [
+        'loading', 'app', 'react app', 'vue app', 'angular app',
+        'apisanitizer', 'sanitizer', 'default', 'untitled',
+        'document', 'page', 'site', 'website', 'home'
+    ]
+    
+    return title_lower in titles_inuteis
+
+async def _buscar_title_alternativo(page: Page) -> str:
+    """🔍 Busca titles alternativos quando o principal é inútil"""
+    
+    try:
+        alternativas = []
+        
+        # 1. H1 principal como title
+        h1_elem = await page.query_selector('h1')
+        if h1_elem:
+            h1_text = await h1_elem.inner_text()
+            if h1_text and len(h1_text.strip()) > 3:
+                alternativas.append(f"H1: {h1_text.strip()}")
+        
+        # 2. Meta og:title
+        og_title_elem = await page.query_selector('meta[property="og:title"]')
+        if og_title_elem:
+            og_title = await og_title_elem.get_attribute('content')
+            if og_title and len(og_title.strip()) > 3:
+                alternativas.append(f"OG: {og_title.strip()}")
+        
+        # 3. Meta twitter:title
+        twitter_title_elem = await page.query_selector('meta[name="twitter:title"]')
+        if twitter_title_elem:
+            twitter_title = await twitter_title_elem.get_attribute('content')
+            if twitter_title and len(twitter_title.strip()) > 3:
+                alternativas.append(f"Twitter: {twitter_title.strip()}")
+        
+        # 4. Primeiro heading não-vazio
+        for i in range(2, 7):  # h2 até h6
+            heading_elem = await page.query_selector(f'h{i}')
+            if heading_elem:
+                heading_text = await heading_elem.inner_text()
+                if heading_text and len(heading_text.strip()) > 3:
+                    alternativas.append(f"H{i}: {heading_text.strip()}")
+                    break
+        
+        # 5. Retorna a melhor alternativa
+        if alternativas:
+            melhor = alternativas[0]
+            tipo, texto = melhor.split(': ', 1)
+            print(f"   🔄 Title alternativo encontrado via {tipo}")
+            return texto
+        
+        return ""
+        
+    except Exception as e:
+        print(f"   ⚠️ Erro buscando title alternativo: {e}")
+        return ""
+
+# ========================
+# 🔗 Extração de Links (MANTÉM SEU CÓDIGO)
 # ========================
 
 async def extrair_links_internos(page: Page, dominio_base: str) -> List[str]:
@@ -437,7 +645,7 @@ async def extrair_links_internos(page: Page, dominio_base: str) -> List[str]:
         return []
 
 # ========================
-# 💾 Cache System
+# 💾 Cache System (MANTÉM SEU CÓDIGO)
 # ========================
 
 def salvar_cache_playwright(nome_arquivo: str, dados: List[Dict]):
@@ -459,7 +667,7 @@ def excluir_cache_playwright(nome_arquivo: str):
         print(f"🧹 Cache Playwright removido: {nome_arquivo}")
 
 # ========================
-# 🚀 Função Principal Enterprise
+# 🚀 FUNÇÃO PRINCIPAL MODIFICADA COM URL MANAGER SEO
 # ========================
 
 async def rastrear_playwright_profundo(
@@ -467,21 +675,10 @@ async def rastrear_playwright_profundo(
     max_urls: int = 1000,
     max_depth: int = 3,
     forcar_reindexacao: bool = False,
-    browser_pool_size: int = 3
+    browser_pool_size: int = 3,
+    perfil_seo: str = 'blog'  # 🆕 NOVO PARÂMETRO
 ) -> List[Dict]:
-    """
-    🚀 Crawler Playwright Enterprise para SEO
-    
-    Args:
-        url_inicial: URL inicial para crawling
-        max_urls: Máximo de URLs para processar
-        max_depth: Profundidade máxima
-        forcar_reindexacao: Ignora cache existente
-        browser_pool_size: Número de browsers no pool
-    
-    Returns:
-        Lista de dicionários com dados SEO completos
-    """
+    """🚀 Crawler Playwright Enterprise com URLManager SEO"""
     
     # 💾 Sistema de cache
     cache_path = f".cache_{urlparse(url_inicial).netloc.replace('.', '_')}_playwright.pkl"
@@ -497,12 +694,15 @@ async def rastrear_playwright_profundo(
     
     print(f"🚀 Crawler Playwright Enterprise iniciado!")
     print(f"📊 Configuração: {max_urls} URLs, profundidade {max_depth}, {browser_pool_size} browsers")
-    print(f"🎯 Modo: Renderização completa com JavaScript")
+    print(f"🎯 Perfil SEO: {perfil_seo}")
+    print(f"🎯 Modo: Renderização completa com JavaScript + URLManager SEO")
+    
+    # 🆕 INICIALIZA URL MANAGER SEO
+    dominio_base = urlparse(url_inicial).netloc
+    url_manager = URLManagerSEO(dominio_base, max_urls, perfil_seo)
+    url_manager.adicionar_url(url_inicial, 0)
     
     resultados = []
-    dominio_base = urlparse(url_inicial).netloc
-    visitadas = set()
-    fila = [(url_inicial, 0)]
     
     async with async_playwright() as playwright:
         # 🚀 Inicializa pool de browsers
@@ -513,27 +713,33 @@ async def rastrear_playwright_profundo(
             # 📊 Progress bar assíncrona
             with tqdm(total=max_urls, desc="🎯 Playwright SEO Crawling") as pbar:
                 
-                # 🔄 Processa URLs em lotes
-                while fila and len(resultados) < max_urls:
-                    # 📦 Cria lote de URLs para processar
-                    lote_atual = []
+                # 🔄 NOVA LÓGICA COM URL MANAGER SEO
+                while True:
+                    # Obtém próxima URL do manager
+                    proxima = url_manager.obter_proxima_url()
+                    if not proxima:
+                        break
+                    
+                    url_atual, nivel = proxima
+                    
+                    # 📦 Cria lote de URLs para processar em paralelo
+                    lote_atual = [(url_atual, nivel)]
                     tasks = []
                     
-                    while (fila and 
-                           len(lote_atual) < PlaywrightConfig.MAX_CONCURRENT_PAGES and 
-                           len(resultados) + len(lote_atual) < max_urls):
-                        
-                        url_atual, nivel = fila.pop(0)
-                        
-                        if url_atual not in visitadas and nivel <= max_depth:
-                            lote_atual.append((url_atual, nivel))
-                            visitadas.add(url_atual)
-                            
-                            # 🚀 Cria task assíncrona
-                            task = processar_url_playwright(
-                                url_atual, nivel, dominio_base, browser_pool
-                            )
-                            tasks.append(task)
+                    # Adiciona mais URLs ao lote se disponível
+                    for _ in range(PlaywrightConfig.MAX_CONCURRENT_PAGES - 1):
+                        proxima_extra = url_manager.obter_proxima_url()
+                        if proxima_extra and len(resultados) + len(lote_atual) < max_urls:
+                            lote_atual.append(proxima_extra)
+                        else:
+                            break
+                    
+                    # Cria tasks para o lote
+                    for url_lote, nivel_lote in lote_atual:
+                        task = processar_url_playwright(
+                            url_lote, nivel_lote, dominio_base, browser_pool
+                        )
+                        tasks.append(task)
                     
                     # ⚡ Executa lote em paralelo
                     if tasks:
@@ -543,17 +749,27 @@ async def rastrear_playwright_profundo(
                             if isinstance(resultado, dict):
                                 resultados.append(resultado)
                                 
-                                # 🔗 Adiciona links encontrados à fila
+                                # 🔗 Adiciona links encontrados ao manager
                                 if (resultado.get("links_encontrados") and 
                                     resultado["nivel"] < max_depth):
-                                    for link in resultado["links_encontrados"]:
-                                        if (link not in visitadas and 
-                                            len(visitadas) + len(fila) < max_urls):
-                                            fila.append((link, resultado["nivel"] + 1))
+                                    adicionadas = url_manager.adicionar_lote_urls_seo(
+                                        resultado["links_encontrados"], 
+                                        resultado["nivel"] + 1, 
+                                        resultado["url"]
+                                    )
+                                    
+                                    if adicionadas > 0 and len(resultados) % 50 == 0:
+                                        print(f"   🔗 {adicionadas} URLs adicionadas do nível {resultado['nivel']+1}")
                                 
                                 pbar.update(1)
                             else:
                                 pbar.update(1)
+                    
+                    # Log periódico com estatísticas SEO
+                    if len(resultados) % 50 == 0:
+                        relatorio = url_manager.obter_relatorio_seo()
+                        print(f"   📊 Progresso: {len(resultados)} URLs | Fila: {relatorio['urls_na_fila']}")
+                        print(f"      Tipos: {relatorio['distribuicao_por_tipo']}")
         
         finally:
             # 🔚 Cleanup
@@ -562,11 +778,17 @@ async def rastrear_playwright_profundo(
     # 💾 Salva cache
     salvar_cache_playwright(cache_path, resultados)
     
-    # 📊 Estatísticas finais
+    # 📊 Relatório final SEO
+    relatorio_final = url_manager.obter_relatorio_seo()
     js_sites = len([r for r in resultados if r.get("needs_javascript", False)])
-    print(f"\n✅ Crawling Playwright concluído!")
-    print(f"📊 {len(resultados)} URLs processadas")
-    print(f"🤖 {js_sites} sites precisaram de JavaScript ({js_sites/len(resultados)*100:.1f}%)")
+    
+    print(f"\n📊 RELATÓRIO PLAYWRIGHT SEO FINAL:")
+    print(f"   Perfil usado: {relatorio_final['perfil_seo']}")
+    print(f"   URLs processadas: {relatorio_final['urls_visitadas']}")
+    print(f"   URLs descobertas: {relatorio_final['total_descobertas']}")
+    print(f"   Distribuição: {relatorio_final['distribuicao_por_tipo']}")
+    print(f"   Cobertura: {relatorio_final['cobertura_por_tipo']}")
+    print(f"   🤖 Sites com JS: {js_sites} ({js_sites/len(resultados)*100:.1f}%)")
     
     return resultados
 
@@ -575,25 +797,46 @@ async def rastrear_playwright_profundo(
 # ========================
 
 async def testar_playwright_crawler():
-    """🧪 Testa o crawler Playwright"""
-    print("🧪 Testando Crawler Playwright...")
+    """🧪 Testa o crawler Playwright com URLManager SEO"""
+    print("🧪 Testando Crawler Playwright Enterprise com URLManager SEO...")
     
     # URLs de teste
     urls_teste = [
         "https://example.com",  # Site simples
-        # Adicione URLs de teste aqui
+        "https://gndisul.com.br",  # Site real para teste
     ]
     
     for url in urls_teste:
         print(f"\n🔍 Testando: {url}")
-        resultado = await rastrear_playwright_profundo(url, max_urls=5, max_depth=1)
+        resultado = await rastrear_playwright_profundo(
+            url, 
+            max_urls=10, 
+            max_depth=2, 
+            perfil_seo='blog'
+        )
         
-        for item in resultado:
-            print(f"  ✅ {item['url']}")
-            print(f"     Title: {item.get('title', 'N/A')}")
-            print(f"     Status: {item.get('status_code', 'N/A')}")
-            print(f"     JS Needed: {item.get('needs_javascript', 'N/A')}")
+        print(f"📊 Resultados obtidos: {len(resultado)}")
+        
+        if resultado:
+            for i, item in enumerate(resultado[:3]):  # Mostra primeiros 3
+                print(f"  {i+1}. ✅ {item['url']}")
+                print(f"       Title: {item.get('title', 'N/A')[:60]}...")
+                print(f"       Status: {item.get('status_code_http', 'N/A')}")
+                print(f"       JS Needed: {item.get('needs_javascript', 'N/A')}")
+                print(f"       Links: {len(item.get('links_encontrados', []))}")
+
+# ========================
+# 🎯 EXECUÇÃO COMPATÍVEL
+# ========================
 
 if __name__ == "__main__":
+    print("🚀 Testando Crawler Playwright Enterprise v3.0 com URLManager SEO")
+    print("🎯 Funcionalidades:")
+    print("   ✅ Browser Pool otimizado")
+    print("   ✅ SiteAnalyzer inteligente") 
+    print("   ✅ Title V5 com blacklist semântica")
+    print("   ✅ URLManager SEO com priorização")
+    print("   ✅ Relatórios detalhados por tipo")
+    
     # 🚀 Execução de teste
     asyncio.run(testar_playwright_crawler())
