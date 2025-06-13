@@ -1,4 +1,4 @@
-# main.py - Atualizado para crawler otimizado
+# main.py - Atualizado para detecção de CSS que oculta headings
 
 import pandas as pd
 import os
@@ -6,7 +6,7 @@ from crawler import rastrear_profundo as crawler_requests
 # from crawler_selenium import rastrear_selenium_profundo as crawler_selenium  # Mantenha se tiver
 from status_checker import verificar_status_http
 from metatags import extrair_metatags
-from validador_headings import validar_headings
+from validador_headings import validar_headings  # 🆕 AGORA COM DETECÇÃO DE CSS
 from http_inseguro import extrair_http_inseguros
 from exporters.excel_manager import exportar_relatorio_completo
 import warnings
@@ -141,14 +141,31 @@ else:
     df['description'] = ''
 
 # ====================
-# HEADINGS - PROCESSA TODAS AS URLs (auditoria completa)
+# 🆕 HEADINGS COM DETECÇÃO DE CSS - PROCESSA TODAS AS URLs
 # ====================
 urls_head = df['url'].dropna().unique().tolist()
-print(f"🧠 Validando headings em {len(urls_head)} URLs únicas (auditoria completa incluindo erros)...")
+print(f"🧠 Validando headings com detecção de CSS em {len(urls_head)} URLs únicas...")
+print(f"🔍 Detectando: headings vazios, ocultos por CSS (display:none, color:white, etc.)")
 
 if urls_head:
-    df_head = pd.DataFrame(validar_headings(urls_head, max_threads=50))
+    df_head = pd.DataFrame(validar_headings(urls_head, max_threads=30))  # Reduzido threads para análise CSS
     df = df.merge(df_head, on='url', how='left')
+    
+    # 🆕 LOG ESTATÍSTICAS DE CSS
+    total_urls = len(df_head)
+    urls_com_vazios = len([r for r in df_head.to_dict('records') if r.get('tem_headings_vazios', False)])
+    urls_com_ocultos = len([r for r in df_head.to_dict('records') if r.get('tem_headings_ocultos', False)])
+    total_vazios = sum([r.get('headings_vazios_count', 0) for r in df_head.to_dict('records')])
+    total_ocultos = sum([r.get('headings_ocultos_count', 0) for r in df_head.to_dict('records')])
+    
+    print(f"📊 RELATÓRIO DE HEADINGS COM CSS:")
+    print(f"   📝 URLs analisadas: {total_urls}")
+    print(f"   🕳️ URLs com headings vazios: {urls_com_vazios} ({total_vazios} headings)")
+    print(f"   🎨 URLs com headings ocultos por CSS: {urls_com_ocultos} ({total_ocultos} headings)")
+    
+    if urls_com_ocultos > 0:
+        print(f"   ⚠️ ATENÇÃO: Headings ocultos por CSS podem prejudicar SEO!")
+        
 else:
     print("⚠️ Nenhuma URL encontrada para validação de headings")
 
@@ -215,9 +232,9 @@ else:
     df_errors = pd.DataFrame()
 
 # ====================
-# ESTATÍSTICAS FINAIS
+# 🆕 ESTATÍSTICAS FINAIS COM CSS
 # ====================
-print("\n📊 ESTATÍSTICAS FINAIS - AUDITORIA SEO COMPLETA:")
+print("\n📊 ESTATÍSTICAS FINAIS - AUDITORIA SEO COMPLETA COM CSS:")
 print(f"📝 Total de URLs processadas: {len(df)}")
 
 # Determina qual coluna de status usar
@@ -246,8 +263,25 @@ print(f"📋 Description ausente: {len(df_description_ausente)} (importante para
 print(f"📋 Title duplicado: {len(df_title_duplicado)} (problema de SEO)")
 print(f"📋 Description duplicado: {len(df_description_duplicado)} (problema de SEO)")
 
+# 🆕 ESTATÍSTICAS DE HEADINGS COM CSS
+print(f"\n🧠 ANÁLISE DE HEADINGS COM DETECÇÃO DE CSS:")
+if 'headings_vazios_count' in df.columns:
+    total_vazios_final = df['headings_vazios_count'].sum()
+    urls_vazios_final = len(df[df['headings_vazios_count'] > 0])
+    print(f"🕳️ Headings vazios: {total_vazios_final} em {urls_vazios_final} URLs")
+
+if 'headings_ocultos_count' in df.columns:
+    total_ocultos_final = df['headings_ocultos_count'].sum() 
+    urls_ocultos_final = len(df[df['headings_ocultos_count'] > 0])
+    print(f"🎨 Headings ocultos por CSS: {total_ocultos_final} em {urls_ocultos_final} URLs")
+    
+    if total_ocultos_final > 0:
+        print(f"   ⚠️ ALERTA SEO: Headings ocultos por CSS podem ser penalizados pelo Google!")
+
+print(f"🎯 Nova aba 'Headings_Vazios' incluirá análise detalhada de CSS")
+
 # ====================
-# EXPORTAÇÃO - ESTRUTURA ORIGINAL PRESERVADA
+# EXPORTAÇÃO - ESTRUTURA ORIGINAL PRESERVADA + CSS
 # ====================
 
 auditorias = {
@@ -258,4 +292,5 @@ auditorias = {
     "df_errors": df_errors
 }
 
+print(f"\n🚀 Exportando relatório com NOVA funcionalidade de detecção de CSS...")
 exportar_relatorio_completo(df, df_http, auditorias, ARQUIVO_SAIDA)
