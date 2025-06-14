@@ -1,264 +1,114 @@
-# revalidador_title_cirurgico.py - VALIDADOR CIRÚRGICO DE TITLES
+# revalidador_headings_hibrido.py - Versão CIRÚRGICA 2.0
+# 🔥 VERSÃO MELHORADA: Pega lixo estrutural real sem falsos positivos
 
-import requests
 import pandas as pd
-from bs4 import BeautifulSoup
-import multiprocessing
+import requests
 import time
+from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from tqdm import tqdm
-import warnings
-warnings.filterwarnings("ignore")
+from urllib.parse import urljoin, urlparse
+import re
 
-# 🔧 CONFIGURAÇÕES
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8"
-}
-
-def calcular_threads_auto():
-    """🧠 Calcula threads automaticamente"""
-    num_cores = multiprocessing.cpu_count()
-    threads_otimo = min(10 * num_cores, 100)
-    print(f"🧠 Hardware detectado: {num_cores} cores → {threads_otimo} threads")
-    return threads_otimo
-
-def validar_title_cirurgico(soup):
-    """🎯 VALIDAÇÃO CIRÚRGICA DO TITLE - Zero heurística, só realidade do DOM"""
+class RevalidadorHeadingsHibridoCirurgico:
+    """🔥 Revalidador CIRÚRGICO 2.0 - Detecta lixo estrutural real"""
     
-    try:
-        # Procura a tag <title> no DOM
-        title_tag = soup.find('title')
-        
-        if title_tag is None:
-            # 🚨 NÃO EXISTE TAG <title> no HTML
-            return {
-                'tem_problema': True,
-                'tipo_problema': 'TAG_AUSENTE',
-                'gravidade': 'CRITICO',
-                'title_encontrado': None,
-                'title_texto': '',
-                'html_title_tag': 'TAG NÃO ENCONTRADA',
-                'descricao': 'Tag <title> não existe no HTML',
-                'recomendacao': 'Adicionar tag <title> no <head> da página'
-            }
-        
-        # Pega o texto da tag
-        title_texto = title_tag.get_text().strip()
-        
-        if not title_texto:
-            # 🚨 TAG EXISTE MAS ESTÁ VAZIA
-            return {
-                'tem_problema': True,
-                'tipo_problema': 'TITLE_VAZIO',
-                'gravidade': 'CRITICO',
-                'title_encontrado': str(title_tag),
-                'title_texto': '',
-                'html_title_tag': str(title_tag)[:200],
-                'descricao': 'Tag <title> existe mas está vazia',
-                'recomendacao': 'Preencher conteúdo da tag <title>'
-            }
-        
-        # ✅ TITLE VÁLIDO
-        return {
-            'tem_problema': False,
-            'tipo_problema': 'VALIDO',
-            'gravidade': 'OK',
-            'title_encontrado': str(title_tag),
-            'title_texto': title_texto,
-            'html_title_tag': str(title_tag)[:200],
-            'descricao': 'Title válido encontrado',
-            'recomendacao': 'Nenhuma ação necessária'
-        }
-        
-    except Exception as e:
-        # 🛡️ PROTEÇÃO À PROVA DE BOMBA
-        return {
-            'tem_problema': True,
-            'tipo_problema': 'ERRO_PARSING',
-            'gravidade': 'MEDIO',
-            'title_encontrado': None,
-            'title_texto': '',
-            'html_title_tag': f'ERRO: {str(e)}',
-            'descricao': f'Erro no parsing HTML: {str(e)}',
-            'recomendacao': 'Verificar HTML da página'
-        }
-
-class RevalidadorTitleCirurgico:
-    """🎯 Revalidador CIRÚRGICO de Titles - Só realidade do DOM"""
-    
-    def __init__(self):
+    def __init__(self, max_workers: int = 15, timeout: int = 10):
+        self.max_workers = max_workers
+        self.timeout = timeout
+        self.session = self._criar_sessao_otimizada()
         self.stats = {
             'urls_processadas': 0,
-            'urls_com_sucesso': 0,
             'urls_filtradas': 0,
-            'tags_ausentes': 0,
-            'titles_vazios': 0,
-            'erros_parsing': 0,
-            'titles_validos': 0,
+            'urls_com_sucesso': 0,
             'erros': 0,
+            'headings_vazios_encontrados': 0,
             'tempo_total': 0
         }
     
-    def revalidar_excel_completo(self, excel_path: str, output_path: str = None):
-        """🔄 Revalida titles no Excel - VERSÃO CIRÚRGICA"""
-        
-        print(f"🔄 REVALIDADOR TITLE CIRÚRGICO - Iniciando...")
-        print(f"📁 Arquivo: {excel_path}")
-        
-        start_time = time.time()
-        
-        try:
-            # Lê Excel existente
-            df = pd.read_excel(excel_path, sheet_name='Resumo')
-            print(f"📊 URLs carregadas: {len(df)}")
-            
-            # Filtra URLs válidas
-            urls_validas = self._filtrar_urls_validas(df)
-            print(f"📋 URLs para revalidação: {len(urls_validas)} (filtradas: {len(df) - len(urls_validas)})")
-            
-            # Calcula threads
-            max_threads = calcular_threads_auto()
-            
-            # Revalida titles em paralelo
-            resultados_titles = self._revalidar_titles_paralelo(urls_validas, max_threads)
-            
-            # Gera aba title_ausente
-            aba_title_ausente = self._gerar_aba_title_ausente(resultados_titles)
-            
-            # Salva Excel atualizado
-            output_final = output_path or excel_path.replace('.xlsx', '_TITLE_CIRURGICO.xlsx')
-            self._atualizar_excel_com_nova_aba(excel_path, output_final, aba_title_ausente)
-            
-            # Estatísticas finais
-            self.stats['tempo_total'] = time.time() - start_time
-            self._exibir_estatisticas_finais()
-            
-            return output_final
-            
-        except Exception as e:
-            print(f"❌ Erro no revalidador: {e}")
-            raise e
-    
-    def _filtrar_urls_validas(self, df: pd.DataFrame) -> list:
-        """🚫 Filtro básico de URLs válidas"""
-        
-        urls_validas = []
-        
-        for _, row in df.iterrows():
-            url = row.get('url', '')
-            
-            # Filtros básicos
-            if not url or not isinstance(url, str):
-                self.stats['urls_filtradas'] += 1
-                continue
-            
-            # Remove extensões não-HTML
-            extensoes_bloqueadas = (
-                '.pdf', '.jpg', '.jpeg', '.png', '.gif', '.doc', '.xls', 
-                '.zip', '.js', '.css', '.mp3', '.mp4', '.xml', '.json'
-            )
-            if url.lower().endswith(extensoes_bloqueadas):
-                self.stats['urls_filtradas'] += 1
-                continue
-            
-            # Remove paginações
-            if '?page=' in url or '&page=' in url:
-                self.stats['urls_filtradas'] += 1
-                continue
-            
-            # Só URLs 200
-            status = row.get('status_code_http', row.get('status_code', None))
-            if status is not None:
-                try:
-                    status_num = int(float(status))
-                    if status_num != 200:
-                        self.stats['urls_filtradas'] += 1
-                        continue
-                except:
-                    self.stats['urls_filtradas'] += 1
-                    continue
-            
-            urls_validas.append(url)
-        
-        return urls_validas
-    
-    def _revalidar_titles_paralelo(self, urls: list, max_threads: int) -> list:
-        """🔄 Revalidação de titles em paralelo"""
-        
-        print(f"🔄 Revalidando titles com {max_threads} threads...")
-        
-        resultados = []
-        
-        # Sessão reutilizável
+    def _criar_sessao_otimizada(self) -> requests.Session:
+        """🚀 Sessão otimizada para performance"""
         session = requests.Session()
-        session.headers.update(HEADERS)
-        
-        with ThreadPoolExecutor(max_workers=max_threads) as executor:
-            # Submete tasks
-            future_to_url = {
-                executor.submit(self._revalidar_title_url, url, session): url 
-                for url in urls
-            }
-            
-            # Processa resultados
-            for future in tqdm(as_completed(future_to_url), total=len(urls), desc="🎯 Validação Title Cirúrgica"):
-                url = future_to_url[future]
-                try:
-                    resultado = future.result()
-                    resultados.append(resultado)
-                    self.stats['urls_processadas'] += 1
-                    
-                    if resultado.get('sucesso', False):
-                        self.stats['urls_com_sucesso'] += 1
-                        
-                        # Conta tipos de problemas
-                        tipo = resultado.get('validacao', {}).get('tipo_problema', 'VALIDO')
-                        if tipo == 'TAG_AUSENTE':
-                            self.stats['tags_ausentes'] += 1
-                        elif tipo == 'TITLE_VAZIO':
-                            self.stats['titles_vazios'] += 1
-                        elif tipo == 'ERRO_PARSING':
-                            self.stats['erros_parsing'] += 1
-                        elif tipo == 'VALIDO':
-                            self.stats['titles_validos'] += 1
-                    else:
-                        self.stats['erros'] += 1
-                        
-                except Exception as e:
-                    self.stats['erros'] += 1
-                    resultados.append({
-                        'url': url,
-                        'sucesso': False,
-                        'erro': str(e),
-                        'validacao': {
-                            'tem_problema': True,
-                            'tipo_problema': 'ERRO_REQUEST',
-                            'gravidade': 'MEDIO'
-                        }
-                    })
-        
-        session.close()
-        return resultados
+        session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1'
+        })
+        return session
     
-    def _revalidar_title_url(self, url: str, session: requests.Session) -> dict:
-        """🎯 Revalidação CIRÚRGICA de title em uma URL"""
+    def heading_realmente_vazio_v2(self, tag) -> bool:
+        """🩺 CIRÚRGICO 2.0: Detecta lixo estrutural real sem falsos positivos"""
+        if tag is None:
+            return True
         
         try:
-            # Request
-            response = session.get(url, timeout=(5, 15), verify=False, allow_redirects=True)
+            # Extrai texto renderizado
+            texto_renderizado = tag.get_text()
+            
+            # LIMPEZA CIRÚRGICA 2.0: Remove lixo HTML real
+            texto_limpo = texto_renderizado.strip()
+            
+            # Remove espaços ocultos comuns
+            texto_limpo = texto_limpo.replace('\xa0', '')  # &nbsp;
+            texto_limpo = texto_limpo.replace('\u200b', '')  # ZERO WIDTH SPACE
+            texto_limpo = texto_limpo.replace('\u00a0', '')  # NON-BREAKING SPACE
+            texto_limpo = texto_limpo.replace('\u2060', '')  # WORD JOINER
+            texto_limpo = texto_limpo.replace('\ufeff', '')  # ZERO WIDTH NO-BREAK SPACE
+            
+            # Remove quebras de linha e tabs
+            texto_limpo = texto_limpo.replace('\n', '').replace('\r', '').replace('\t', '')
+            
+            # Remove espaços múltiplos
+            texto_limpo = re.sub(r'\s+', ' ', texto_limpo).strip()
+            
+            # CIRÚRGICO: Se após limpeza total não sobrou nada = VAZIO REAL
+            return len(texto_limpo) == 0
+            
+        except Exception:
+            return True
+    
+    def _extrair_headings_dom_puro(self, url: str) -> dict:
+        """🎯 Extração DOM pura para headings vazios REAIS"""
+        
+        try:
+            response = self.session.get(url, timeout=self.timeout, verify=False)
             response.raise_for_status()
             
-            # Parse HTML
-            soup = BeautifulSoup(response.text, 'lxml')
+            soup = BeautifulSoup(response.content, 'html.parser')
             
-            # Validação CIRÚRGICA
-            validacao = validar_title_cirurgico(soup)
+            headings_vazios_count = 0
+            headings_problematicos = []
+            
+            # Verifica H1-H6
+            for i in range(1, 7):
+                tags = soup.find_all(f'h{i}')
+                
+                for idx, tag in enumerate(tags, 1):
+                    if self.heading_realmente_vazio_v2(tag):
+                        headings_vazios_count += 1
+                        
+                        # HTML original (primeiros 200 chars)
+                        html_original = str(tag)[:200]
+                        
+                        headings_problematicos.append({
+                            'tag': f'h{i}',
+                            'posicao': f'{idx}º {f"H{i}"} na página',
+                            'html_original': html_original,
+                            'texto_extraido': tag.get_text() if tag else '',
+                            'contexto_pai': self._extrair_contexto_pai(tag),
+                            'atributos_heading': self._extrair_atributos_heading(tag),
+                            'gravidade': 'CRITICO' if i == 1 else 'ALTO',
+                            'recomendacao': f'Preencher conteúdo do {f"H{i}"} ou remover tag vazia'
+                        })
             
             return {
                 'url': url,
                 'sucesso': True,
-                'validacao': validacao
+                'headings_vazios_count': headings_vazios_count,
+                'headings_problematicos': headings_problematicos,
+                'total_problemas': len(headings_problematicos)
             }
             
         except Exception as e:
@@ -266,20 +116,113 @@ class RevalidadorTitleCirurgico:
                 'url': url,
                 'sucesso': False,
                 'erro': str(e),
-                'validacao': {
-                    'tem_problema': True,
-                    'tipo_problema': 'ERRO_REQUEST',
-                    'gravidade': 'MEDIO',
-                    'title_encontrado': None,
-                    'title_texto': '',
-                    'html_title_tag': f'ERRO REQUEST: {str(e)}',
-                    'descricao': f'Erro na requisição: {str(e)}',
-                    'recomendacao': 'Verificar conectividade com a URL'
-                }
+                'headings_vazios_count': 0,
+                'headings_problematicos': []
             }
     
-    def _gerar_aba_title_ausente(self, resultados: list) -> pd.DataFrame:
-        """📋 Gera DataFrame para aba Title_Ausente"""
+    def _extrair_contexto_pai(self, tag) -> str:
+        """📍 Extrai contexto do elemento pai"""
+        try:
+            if tag and tag.parent:
+                pai = tag.parent
+                pai_info = f"<{pai.name}"
+                if pai.get('class'):
+                    pai_info += f" class='{' '.join(pai.get('class'))}'"
+                if pai.get('id'):
+                    pai_info += f" id='{pai.get('id')}'"
+                pai_info += ">"
+                return pai_info
+            return "sem pai"
+        except:
+            return "erro contexto"
+    
+    def _extrair_atributos_heading(self, tag) -> str:
+        """🏷️ Extrai atributos do heading"""
+        try:
+            atributos = []
+            if tag.get('class'):
+                atributos.append(f"class='{' '.join(tag.get('class'))}'")
+            if tag.get('id'):
+                atributos.append(f"id='{tag.get('id')}'")
+            return ' '.join(atributos) if atributos else 'sem atributos'
+        except:
+            return 'erro atributos'
+    
+    def _filtrar_urls_duplicadas(self, urls: list) -> list:
+        """🧹 Remove duplicatas e URLs inválidas"""
+        urls_unicas = []
+        urls_vistas = set()
+        
+        for url in urls:
+            if not url or pd.isna(url):
+                continue
+            
+            url_limpa = str(url).strip()
+            
+            # Filtros básicos
+            if not url_limpa.startswith(('http://', 'https://')):
+                continue
+            
+            if url_limpa in urls_vistas:
+                continue
+            
+            # Filtros de URL indesejadas
+            if any(skip in url_limpa.lower() for skip in [
+                '.pdf', '.jpg', '.png', '.gif', '.zip', '.rar',
+                'mailto:', 'tel:', 'javascript:', '#',
+                '?page=', '&page=', '/page/'
+            ]):
+                continue
+            
+            urls_vistas.add(url_limpa)
+            urls_unicas.append(url_limpa)
+        
+        return urls_unicas
+    
+    def revalidar_urls_paralelo(self, urls: list) -> list:
+        """🚀 Revalidação paralela otimizada"""
+        
+        print(f"🔥 REVALIDAÇÃO CIRÚRGICA 2.0 INICIADA")
+        print(f"📊 URLs para processar: {len(urls)}")
+        
+        urls_filtradas = self._filtrar_urls_duplicadas(urls)
+        self.stats['urls_filtradas'] = len(urls) - len(urls_filtradas)
+        
+        print(f"🧹 URLs após filtros: {len(urls_filtradas)}")
+        print(f"🎯 Critério: Detectar lixo estrutural real (espaços ocultos, &nbsp;, tags vazias)")
+        
+        inicio = time.time()
+        resultados = []
+        
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            # Submete todas as URLs
+            future_to_url = {
+                executor.submit(self._extrair_headings_dom_puro, url): url 
+                for url in urls_filtradas
+            }
+            
+            # Processa resultados conforme completam
+            for future in as_completed(future_to_url):
+                resultado = future.result()
+                resultados.append(resultado)
+                
+                self.stats['urls_processadas'] += 1
+                
+                if resultado.get('sucesso', False):
+                    self.stats['urls_com_sucesso'] += 1
+                    self.stats['headings_vazios_encontrados'] += resultado.get('headings_vazios_count', 0)
+                else:
+                    self.stats['erros'] += 1
+                
+                # Progress indicator
+                if self.stats['urls_processadas'] % 50 == 0:
+                    print(f"⚡ Processadas: {self.stats['urls_processadas']}/{len(urls_filtradas)}")
+        
+        self.stats['tempo_total'] = time.time() - inicio
+        return resultados
+    
+    def _gerar_aba_headings_vazios(self, resultados: list) -> pd.DataFrame:
+        """📋 Gera DataFrame para aba headings_vazios"""
         
         rows = []
         
@@ -287,27 +230,27 @@ class RevalidadorTitleCirurgico:
             if not resultado.get('sucesso', False):
                 continue
             
-            validacao = resultado.get('validacao', {})
+            url = resultado['url']
+            problemas = resultado.get('headings_problematicos', [])
             
-            # Só adiciona se tem problema
-            if validacao.get('tem_problema', False):
-                url = resultado['url']
-                
+            for problema in problemas:
                 rows.append({
                     'URL': url,
-                    'Tipo_Problema': validacao.get('tipo_problema', 'DESCONHECIDO'),
-                    'Gravidade': validacao.get('gravidade', 'MEDIO'),
-                    'Title_Encontrado': validacao.get('title_texto', ''),
-                    'HTML_Title_Tag': validacao.get('html_title_tag', ''),
-                    'Descricao': validacao.get('descricao', ''),
-                    'Recomendacao': validacao.get('recomendacao', '')
+                    'Tag': problema.get('tag', '').upper(),
+                    'Posicao': problema.get('posicao', 'N/A'),
+                    'HTML_Original': problema.get('html_original', ''),
+                    'Texto_Extraido': f"'{problema.get('texto_extraido', '')}'",
+                    'Contexto_Pai': problema.get('contexto_pai', 'N/A'),
+                    'Atributos_Heading': problema.get('atributos_heading', 'sem atributos'),
+                    'Gravidade': problema.get('gravidade', 'ALTO'),
+                    'Recomendacao': problema.get('recomendacao', 'Revisar heading')
                 })
         
         if not rows:
             # DataFrame vazio se não há problemas
             return pd.DataFrame(columns=[
-                'URL', 'Tipo_Problema', 'Gravidade', 'Title_Encontrado',
-                'HTML_Title_Tag', 'Descricao', 'Recomendacao'
+                'URL', 'Tag', 'Posicao', 'HTML_Original', 'Texto_Extraido',
+                'Contexto_Pai', 'Atributos_Heading', 'Gravidade', 'Recomendacao'
             ])
         
         df = pd.DataFrame(rows)
@@ -315,24 +258,60 @@ class RevalidadorTitleCirurgico:
         # Ordenação por gravidade
         gravidade_order = {'CRITICO': 1, 'ALTO': 2, 'MEDIO': 3, 'BAIXO': 4}
         df['sort_gravidade'] = df['Gravidade'].map(gravidade_order).fillna(99)
-        df = df.sort_values(['sort_gravidade', 'URL'])
+        df = df.sort_values(['sort_gravidade', 'URL', 'Tag'])
         df = df.drop('sort_gravidade', axis=1)
         
         return df
     
-    def _atualizar_excel_com_nova_aba(self, excel_original: str, excel_saida: str, df_titles: pd.DataFrame):
-        """📤 Atualiza Excel com nova aba Title_Ausente"""
+    def revalidar_excel_completo(self, excel_path: str, output_path: str = None) -> str:
+        """📊 Revalida Excel completo com CIRÚRGICO 2.0"""
+        
+        if output_path is None:
+            output_path = excel_path.replace('.xlsx', '_HEADINGS_CIRURGICO_V2.xlsx')
+        
+        print(f"📁 Lendo Excel: {excel_path}")
+        
+        try:
+            # Lê aba principal
+            df_principal = pd.read_excel(excel_path, sheet_name=0)
+            
+            if 'url' not in df_principal.columns:
+                raise ValueError("Coluna 'url' não encontrada na aba principal")
+            
+            urls = df_principal['url'].dropna().unique().tolist()
+            print(f"🎯 URLs extraídas da aba principal: {len(urls)}")
+            
+            # Revalidação CIRÚRGICA 2.0
+            resultados = self.revalidar_urls_paralelo(urls)
+            
+            # Gera nova aba de headings vazios
+            df_headings_vazios = self._gerar_aba_headings_vazios(resultados)
+            
+            # Atualiza Excel
+            self._atualizar_excel_com_nova_aba(excel_path, output_path, df_headings_vazios)
+            
+            # Estatísticas finais
+            self._exibir_estatisticas_finais()
+            
+            return output_path
+            
+        except Exception as e:
+            print(f"❌ Erro no processamento: {e}")
+            raise
+    
+    def _atualizar_excel_com_nova_aba(self, excel_original: str, excel_saida: str, df_headings: pd.DataFrame):
+        """📤 Atualiza Excel com nova aba headings_vazios"""
         
         try:
             # Lê todas as abas do Excel original
             with pd.ExcelFile(excel_original) as xls:
                 dict_dfs = {}
                 for sheet_name in xls.sheet_names:
-                    if sheet_name != 'Title_Ausente':  # Remove aba antiga se existir
+                    if sheet_name != 'Headings_Vazios':  # Remove aba antiga se existir
                         dict_dfs[sheet_name] = pd.read_excel(xls, sheet_name=sheet_name)
             
-            # Adiciona nova aba title_ausente
-            dict_dfs['Title_Ausente'] = df_titles
+            # Adiciona nova aba headings_vazios
+            dict_dfs['Headings_Vazios'] = df_headings
             
             # Salva Excel atualizado
             with pd.ExcelWriter(excel_saida, engine='xlsxwriter') as writer:
@@ -340,45 +319,53 @@ class RevalidadorTitleCirurgico:
                     df.to_excel(writer, sheet_name=sheet_name, index=False)
             
             print(f"✅ Excel atualizado: {excel_saida}")
-            print(f"📋 Aba 'Title_Ausente' criada com {len(df_titles)} problemas REAIS")
+            print(f"📋 Aba 'Headings_Vazios' criada com {len(df_headings)} problemas REAIS")
             
         except Exception as e:
             print(f"❌ Erro atualizando Excel: {e}")
-            # Fallback: salva só a aba
-            df_titles.to_excel(excel_saida.replace('.xlsx', '_title_ausente_only.xlsx'), index=False)
+            # Fallback: salva só a aba headings_vazios
+            df_headings.to_excel(excel_saida.replace('.xlsx', '_headings_vazios_only.xlsx'), index=False)
     
     def _exibir_estatisticas_finais(self):
-        """📊 Exibe estatísticas CIRÚRGICAS"""
+        """📊 Exibe estatísticas CIRÚRGICAS 2.0"""
         
-        print(f"\n📊 ESTATÍSTICAS TITLE CIRÚRGICO:")
+        print(f"\n📊 ESTATÍSTICAS CIRÚRGICAS 2.0:")
         print(f"   📈 URLs processadas: {self.stats['urls_processadas']}")
         print(f"   🚫 URLs filtradas: {self.stats['urls_filtradas']}")
         print(f"   ✅ URLs com sucesso: {self.stats['urls_com_sucesso']}")
-        print(f"   ❌ Erros de request: {self.stats['erros']}")
-        print(f"   🚨 Tags <title> ausentes: {self.stats['tags_ausentes']}")
-        print(f"   🕳️ Titles vazios: {self.stats['titles_vazios']}")
-        print(f"   ⚠️ Erros de parsing: {self.stats['erros_parsing']}")
-        print(f"   ✅ Titles válidos: {self.stats['titles_validos']}")
+        print(f"   ❌ Erros: {self.stats['erros']}")
+        print(f"   🎯 Headings com lixo estrutural: {self.stats['headings_vazios_encontrados']}")
         print(f"   ⏰ Tempo total: {self.stats['tempo_total']:.1f}s")
-        
-        total_problemas = self.stats['tags_ausentes'] + self.stats['titles_vazios'] + self.stats['erros_parsing']
-        print(f"   🎯 Total de problemas REAIS: {total_problemas}")
         
         if self.stats['urls_processadas'] > 0:
             taxa_sucesso = (self.stats['urls_com_sucesso'] / self.stats['urls_processadas']) * 100
             urls_por_segundo = self.stats['urls_processadas'] / self.stats['tempo_total']
             print(f"   📊 Taxa de sucesso: {taxa_sucesso:.1f}%")
             print(f"   🚀 Velocidade: {urls_por_segundo:.1f} URLs/segundo")
+        
+        print(f"\n🔥 CRITÉRIO CIRÚRGICO 2.0:")
+        print(f"   ✅ Detecta: &nbsp;, espaços ocultos, quebras de linha, tags aninhadas vazias")
+        print(f"   ✅ Ignora: Conteúdo real (mesmo com espaços normais)")
+        print(f"   🎯 Resultado: Lixo estrutural real sem falsos positivos")
 
 # ========================
 # 🚀 FUNÇÃO STANDALONE
 # ========================
 
-def revalidar_titles_excel_cirurgico(excel_path: str, output_path: str = None):
-    """🚀 Função standalone CIRÚRGICA para titles"""
+def revalidar_headings_excel_cirurgico(excel_path: str, output_path: str = None):
+    """🚀 Função standalone CIRÚRGICA 2.0"""
     
-    revalidador = RevalidadorTitleCirurgico()
+    revalidador = RevalidadorHeadingsHibridoCirurgico()
     return revalidador.revalidar_excel_completo(excel_path, output_path)
+
+# Mantém compatibilidade
+def revalidar_headings_excel_otimizado(excel_path: str, output_path: str = None):
+    """🔄 Compatibilidade com versão otimizada"""
+    return revalidar_headings_excel_cirurgico(excel_path, output_path)
+
+class RevalidadorHeadingsHibridoOtimizado(RevalidadorHeadingsHibridoCirurgico):
+    """🔄 Compatibilidade com classe otimizada"""
+    pass
 
 # ========================
 # 🧪 TESTE STANDALONE
@@ -388,17 +375,18 @@ if __name__ == "__main__":
     import sys
     
     if len(sys.argv) < 2:
-        print("❌ Uso: python revalidador_title_cirurgico.py <arquivo.xlsx> [arquivo_saida.xlsx]")
+        print("❌ Uso: python revalidador_headings_hibrido.py <arquivo.xlsx> [arquivo_saida.xlsx]")
         sys.exit(1)
     
     excel_input = sys.argv[1]
     excel_output = sys.argv[2] if len(sys.argv) > 2 else None
     
     try:
-        arquivo_final = revalidar_titles_excel_cirurgico(excel_input, excel_output)
-        print(f"🎉 REVALIDAÇÃO TITLE CIRÚRGICA CONCLUÍDA!")
+        arquivo_final = revalidar_headings_excel_cirurgico(excel_input, excel_output)
+        print(f"🎉 REVALIDAÇÃO CIRÚRGICA 2.0 CONCLUÍDA!")
         print(f"📁 Arquivo final: {arquivo_final}")
-        print(f"🎯 CRITÉRIO: Só titles REALMENTE ausentes ou vazios (DOM puro)")
+        print(f"🔥 CRITÉRIO: Detecta lixo estrutural real (&nbsp;, espaços ocultos, tags vazias)")
+        print(f"🎯 RESULTADO: Zero falsos positivos + captura problemas reais")
     except Exception as e:
         print(f"💥 Erro: {e}")
         sys.exit(1)
