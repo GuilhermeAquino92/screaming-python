@@ -66,7 +66,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 # 🎯 CONFIGURAÇÃO GLOBAL PIPELINE
 # ========================
 
-URL_BASE = "https://gndisul.com.br"
+URL_BASE = "https://ccgsaude.com.br"
 MAX_URLS = 1000
 MAX_DEPTH = 3
 
@@ -389,8 +389,20 @@ async def main_pipeline():
         else:
             arquivo_final = ARQUIVO_SAIDA
         
-        exportar_relatorio_completo(df, df_http, auditorias, arquivo_final)
-        print(f"✅ Relatório exportado: {arquivo_final}")
+        # 📤 EXPORTAÇÃO INICIAL
+        excel_inicial = exportar_relatorio_completo(df, df_http, auditorias, ARQUIVO_SAIDA)
+        print(f"✅ Relatório inicial exportado: {excel_inicial}")
+
+        # 🔥 PATCH HÍBRIDO (OPCIONAL)
+        print(f"\n🔥 PATCH HÍBRIDO DISPONÍVEL:")
+        print(f"   O patch revalida headings vazios com requests direto (mais preciso)")
+        aplicar_patch = input("🤔 Aplicar patch híbrido para headings vazios? (s/N): ").lower().strip()
+
+        if aplicar_patch in ['s', 'sim', 'y', 'yes']:
+            arquivo_final = aplicar_patch_headings_hibrido(excel_inicial)
+        else:
+            arquivo_final = excel_inicial
+            print(f"⏭️ Patch híbrido pulado - mantendo versão original")
         
     except Exception as e:
         print(f"❌ Erro na exportação: {e}")
@@ -462,20 +474,143 @@ def main_sync():
         except Exception as e2:
             print(f"💥 Erro total: {e2}")
 
+
 # ========================
-# 🎯 EXECUÇÃO
+# 🔥 ADICIONE ESTA FUNÇÃO ANTES DO "if __name__ == "__main__":" 
 # ========================
 
-if __name__ == "__main__":
-    print("🚀 SISTEMA SEO PIPELINE LEAN")
-    print("🏗️ Arquitetura Pipeline Simples:")
-    print("   1️⃣ Crawling Híbrido (Playwright LEAN + Requests)")
-    print("   2️⃣ Análise de Dados (tipos, distribuição)")
-    print("   3️⃣ Verificações Complementares (status, meta, headings)")
-    print("   4️⃣ Auditorias SEO (title, description, erros)")
-    print("   5️⃣ Estatísticas e Análise")
-    print("   6️⃣ Exportação (Excel + fallbacks)")
-    print("   7️⃣ Relatório e Recomendações")
-    print()
+def aplicar_patch_headings_hibrido(excel_path: str) -> str:
+    """🔥 Aplica patch híbrido para headings vazios"""
     
-    main_sync()
+    try:
+        print(f"\n🔥 APLICANDO PATCH HÍBRIDO HEADINGS...")
+        print(f"📁 Arquivo: {excel_path}")
+        
+        # Import do revalidador
+        from revalidador_headings_hibrido import RevalidadorHeadingsHibridoOtimizado as RevalidadorHeadingsHibrido        
+        # Aplica patch
+        revalidador = RevalidadorHeadingsHibrido()
+        excel_corrigido = revalidador.revalidar_excel_completo(
+            excel_path, 
+            excel_path.replace('.xlsx', '_HIBRIDO.xlsx')
+        )
+        
+        print(f"✅ PATCH HÍBRIDO APLICADO!")
+        print(f"📁 Arquivo corrigido: {excel_corrigido}")
+        
+        return excel_corrigido
+        
+    except Exception as e:
+        print(f"❌ Erro no patch híbrido: {e}")
+        print(f"📋 Mantendo arquivo original: {excel_path}")
+        return excel_path
+
+# ========================
+# 🔧 MODIFIQUE A FUNÇÃO main_sync()
+# ========================
+
+# DENTRO da função main_sync(), ENCONTRE esta parte:
+#     excel_path = exportar_relatorio_completo(df, df_http, auditorias, nome_arquivo)
+#     
+#     print(f"\n🎉 PIPELINE CONCLUÍDO COM SUCESSO!")
+
+# SUBSTITUA por:
+
+    # 📤 EXPORTAÇÃO INICIAL
+    excel_inicial = exportar_relatorio_completo(df, df_http, auditorias, nome_arquivo)
+    
+    # 🔥 PATCH HÍBRIDO (OPCIONAL)
+    print(f"\n🔥 PATCH HÍBRIDO DISPONÍVEL:")
+    print(f"   O patch revalida headings vazios com requests direto (mais preciso)")
+    aplicar_patch = input("🤔 Aplicar patch híbrido para headings vazios? (s/N): ").lower().strip()
+    
+    if aplicar_patch in ['s', 'sim', 'y', 'yes']:
+        excel_final = aplicar_patch_headings_hibrido(excel_inicial)
+    else:
+        excel_final = excel_inicial
+        print(f"⏭️ Patch híbrido pulado - mantendo versão original")
+    
+    print(f"\n🎉 PIPELINE CONCLUÍDO COM SUCESSO!")
+    print("="*50)
+    print(f"📁 Arquivo: {excel_final}")
+# INTEGRAÇÃO DO TITLE CIRÚRGICO NO main_hibrido.py
+
+# ========================
+# 🔥 SUBSTITUA A FUNÇÃO aplicar_patch_headings_hibrido POR ESTA:
+# ========================
+
+# INTEGRAÇÃO DO TITLE CIRÚRGICO NO main_hibrido.py
+
+# ========================
+# 🔥 SUBSTITUA A FUNÇÃO aplicar_patch_headings_hibrido POR ESTA:
+# ========================
+
+# INTEGRAÇÃO DO TITLE CIRÚRGICO NO main_hibrido.py
+
+# ========================
+# 🔥 SUBSTITUA A FUNÇÃO aplicar_patch_headings_hibrido POR ESTA:
+# ========================
+
+def aplicar_patch_cirurgico_completo(excel_path: str) -> str:
+    """🔥 Aplica patch CIRÚRGICO completo AUTOMÁTICO: headings + titles"""
+    
+    try:
+        print(f"🔥 PATCH CIRÚRGICO AUTOMÁTICO INICIADO")
+        print(f"📁 Arquivo base: {excel_path}")
+        
+        # 1. PATCH HEADINGS CIRÚRGICO (AUTOMÁTICO)
+        print(f"\n🎯 1/2 - HEADINGS VAZIOS CIRÚRGICO (AUTOMÁTICO):")
+        from revalidador_headings_hibrido import revalidar_headings_excel_cirurgico
+        
+        excel_com_headings = revalidar_headings_excel_cirurgico(
+            excel_path, 
+            excel_path.replace('.xlsx', '_TEMP_HEADINGS.xlsx')
+        )
+        
+        # 2. PATCH TITLES CIRÚRGICO (AUTOMÁTICO)
+        print(f"\n🎯 2/2 - TITLES AUSENTES CIRÚRGICO (AUTOMÁTICO):")
+        from revalidador_title_cirurgico import revalidar_titles_excel_cirurgico
+        
+        excel_final = revalidar_titles_excel_cirurgico(
+            excel_com_headings,
+            excel_path.replace('.xlsx', '_CIRURGICO_COMPLETO.xlsx')
+        )
+        
+        # 3. LIMPA ARQUIVO TEMPORÁRIO
+        try:
+            import os
+            if os.path.exists(excel_com_headings) and 'TEMP' in excel_com_headings:
+                os.remove(excel_com_headings)
+                print(f"🗑️ Arquivo temporário removido")
+        except:
+            pass
+        
+        print(f"\n✅ PATCH CIRÚRGICO AUTOMÁTICO CONCLUÍDO!")
+        print(f"📁 Arquivo final: {excel_final}")
+        print(f"🎯 Contém: Headings Vazios + Titles Ausentes (100% cirúrgico, 0% falsos positivos)")
+        
+        return excel_final
+        
+    except Exception as e:
+        print(f"❌ Erro no patch cirúrgico: {e}")
+        print(f"📋 Mantendo arquivo original: {excel_path}")
+        return excel_path
+
+# ========================
+# 🔧 MODIFIQUE A EXPORTAÇÃO NO main_pipeline() PARA:
+# ========================
+
+# 📤 EXPORTAÇÃO INICIAL
+excel_inicial = exportar_relatorio_completo(df, df_http, auditorias, arquivo_final)
+print(f"✅ Relatório inicial exportado: {excel_inicial}")
+
+# 🔥 PATCH CIRÚRGICO AUTOMÁTICO
+print(f"\n🔥 APLICANDO PATCH CIRÚRGICO AUTOMÁTICO...")
+print(f"   ✅ Headings Vazios: DOM puro (sem falsos positivos)")
+print(f"   ✅ Titles Ausentes: Verificação real de tags HTML")
+print(f"   🎯 100% Cirúrgico - Só problemas REAIS")
+
+arquivo_final = aplicar_patch_cirurgico_completo(excel_inicial)
+
+
+

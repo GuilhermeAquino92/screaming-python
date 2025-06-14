@@ -1,10 +1,58 @@
-# excel_manager.py - CORREÇÃO DEFINITIVA para Pipeline Híbrido
+# excel_manager.py - CORREÇÃO para Pipeline Híbrido
 
 import os
 import pandas as pd
+import numpy as np
 import logging
 
 logger = logging.getLogger(__name__)
+
+def safe_clean_value(x):
+    """🛡️ Limpa valores individuais - VERSÃO CORRIGIDA"""
+    
+    # Primeiro, verifica se é um array numpy ou similar
+    if hasattr(x, '__len__') and hasattr(x, 'dtype'):
+        # É um array numpy ou similar
+        if hasattr(x, 'size') and x.size == 0:
+            # Array vazio
+            return ''
+        elif isinstance(x, np.ndarray):
+            # Array não vazio - converte para string
+            str_repr = str(x.tolist() if x.size <= 10 else f"{x.tolist()[:10]}...")
+            return str_repr[:300] + '...' if len(str_repr) > 300 else str_repr
+    
+    # Verificação para None - deve vir antes de pd.isna para arrays
+    if x is None:
+        return ''
+    
+    # Verificação para pandas NA - com tratamento de array
+    try:
+        if pd.isna(x):
+            return ''
+    except ValueError:
+        # Se pd.isna falhar (como com arrays), trata como objeto complexo
+        pass
+    
+    # Trata objetos complexos
+    if isinstance(x, (list, dict, tuple, set)):
+        # Converte objetos complexos para string truncada
+        str_repr = str(x)
+        return str_repr[:300] + '...' if len(str_repr) > 300 else str_repr
+    elif isinstance(x, str):
+        # Limpa strings problemáticas
+        try:
+            # Remove caracteres de controle
+            clean_str = ''.join(char for char in x if ord(char) >= 32 or char in '\t\n\r')
+            # Trunca se muito longo
+            return clean_str[:500] + '...' if len(clean_str) > 500 else clean_str
+        except:
+            return str(x)[:500]
+    else:
+        # Para qualquer outro tipo, converte para string
+        try:
+            return str(x)
+        except:
+            return ''
 
 def clean_dataframe_for_excel(df):
     """🧹 Limpa DataFrame para exportação segura no Excel"""
@@ -14,26 +62,6 @@ def clean_dataframe_for_excel(df):
     
     for col in df_clean.columns:
         if df_clean[col].dtype == 'object':
-            
-            def safe_clean_value(x):
-                """🛡️ Limpa valores individuais"""
-                if x is None or pd.isna(x):
-                    return ''
-                elif isinstance(x, (list, dict, tuple, set)):
-                    # Converte objetos complexos para string truncada
-                    str_repr = str(x)
-                    return str_repr[:300] + '...' if len(str_repr) > 300 else str_repr
-                elif isinstance(x, str):
-                    # Limpa strings problemáticas
-                    try:
-                        # Remove caracteres de controle
-                        clean_str = ''.join(char for char in x if ord(char) >= 32 or char in '\t\n\r')
-                        # Trunca se muito longo
-                        return clean_str[:500] + '...' if len(clean_str) > 500 else clean_str
-                    except:
-                        return str(x)[:500]
-                else:
-                    return str(x)
             
             # Aplica limpeza
             original_sample = df_clean[col].dropna().head(1)
@@ -146,7 +174,7 @@ def exportar_relatorio_completo(df, df_http, auditorias, output_path):
                     if meta_cols:
                         df_clean[meta_cols].to_excel(writer, sheet_name='Metatags', index=False)
                 
-                # 4-6. ABAS DE HEADINGS (com fallback individual)
+                # 4-6. ABAS DE HEADINGS (com fallback individual) - RESTAURADAS!
                 heading_sheets = [
                     ('HeadingsEstruturaSheet', 'Estrutura_Headings'),
                     ('H1H2ProblemasSheet', 'H1_H2_Problemas'),
@@ -166,7 +194,7 @@ def exportar_relatorio_completo(df, df_http, auditorias, output_path):
                         print(f"   ⚠️ Erro na aba {sheet_name}, criando vazia: {e}")
                         pd.DataFrame({'url': [], 'problema': []}).to_excel(writer, sheet_name=sheet_name[:31], index=False)
                 
-                # 7. ABA HTTP INSEGURO
+                # 7. ABA HTTP INSEGURO - RESTAURADA!
                 try:
                     HTTPInseguroSheet(df_http_clean, writer).export()
                     print("   ✅ Aba 'HTTP_Inseguro' criada")

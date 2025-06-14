@@ -18,7 +18,7 @@ TITLE_TIMEOUT = 15000  # 15s - HARDENED para sites como GNDI
 FALLBACK_TIMEOUT = 3000  # 3s adicional para JS assíncrono
 PAGE_TIMEOUT = 30000
 NAV_TIMEOUT = 20000
-BROWSER_POOL_SIZE = 3
+BROWSER_POOL_SIZE = 5
 
 # ========================
 # 🎭 BROWSER POOL SIMPLES E EFICAZ
@@ -155,11 +155,32 @@ async def extract_title_hardened(page: Page, url: str) -> str:
 # ========================
 # 📊 SEO DATA EXTRACTOR SIMPLES
 # ========================
+# CORREÇÃO para crawler_playwright.py
+# Substitua a função extract_seo_data por esta versão:
 
 async def extract_seo_data(page: Page, url: str) -> Dict:
-    """📊 Extrai dados SEO essenciais - sem over-engineering"""
+    """📊 Extrai dados SEO essenciais - VERSÃO CORRIGIDA ANTI LAZY LOADING"""
     
     try:
+        # 🚀 CORREÇÃO 1: SCROLL FORÇADO + ESPERA
+        print(f"   🔄 Forçando lazy loading...")
+        
+        # Scroll para baixo (força lazy loading)
+        await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+        await page.wait_for_timeout(1500)  # Espera renderização
+        
+        # Scroll para cima (estabiliza)
+        await page.evaluate("window.scrollTo(0, 0)")
+        await page.wait_for_timeout(500)
+        
+        # Aguarda network idle se possível
+        try:
+            await page.wait_for_load_state('networkidle', timeout=3000)
+        except:
+            pass  # Ignora timeout
+        
+        print(f"   📊 Extraindo dados SEO...")
+        
         # Meta description
         desc_elem = await page.query_selector('meta[name="description"]')
         description = ""
@@ -172,18 +193,68 @@ async def extract_seo_data(page: Page, url: str) -> Dict:
         if canonical_elem:
             canonical = await canonical_elem.get_attribute('href') or ""
         
-        # Headings (simples e eficaz)
+        # 🔥 HEADINGS CORRIGIDOS - MÉTODO DUPLO
         headings_data = {}
+        
+        # MÉTODO 1: Query Selector (padrão)
         for i in range(1, 7):
             headings = await page.query_selector_all(f'h{i}')
             texts = []
             for h in headings:
-                text = await h.inner_text()
-                if text.strip():
-                    texts.append(text.strip())
+                try:
+                    text = await h.inner_text()
+                    if not text or not text.strip():
+                        # Fallback: textContent  
+                        text = await h.evaluate('el => el.textContent')
+                    
+                    if text and text.strip():
+                        texts.append(text.strip())
+                except:
+                    continue
             
             headings_data[f'h{i}'] = len(texts)
             headings_data[f'h{i}_texts'] = texts
+        
+        # 🔥 MÉTODO 2: JavaScript Evaluate (para casos extremos)
+        try:
+            js_headings = await page.evaluate("""
+                () => {
+                    const headings = {};
+                    for (let i = 1; i <= 6; i++) {
+                        const elements = document.querySelectorAll(`h${i}`);
+                        const texts = [];
+                        elements.forEach(el => {
+                            const text = el.innerText || el.textContent || '';
+                            if (text.trim()) {
+                                texts.push(text.trim());
+                            }
+                        });
+                        headings[`h${i}`] = texts.length;
+                        headings[`h${i}_texts`] = texts;
+                    }
+                    return headings;
+                }
+            """)
+            
+            # MERGE: Usa o método que encontrou mais headings
+            for i in range(1, 7):
+                key = f'h{i}'
+                key_texts = f'h{i}_texts'
+                
+                if js_headings.get(key, 0) > headings_data.get(key, 0):
+                    headings_data[key] = js_headings[key]
+                    headings_data[key_texts] = js_headings[key_texts]
+                    print(f"      🎯 JS method found more {key}: {js_headings[key]} vs {headings_data.get(key, 0)}")
+            
+        except Exception as e:
+            print(f"      ⚠️ Erro no método JS: {e}")
+        
+        # 🔥 DEBUG: Log dos resultados
+        total_headings = sum(headings_data.get(f'h{i}', 0) for i in range(1, 7))
+        print(f"   📊 Headings encontrados: H1:{headings_data.get('h1', 0)} H2:{headings_data.get('h2', 0)} H3:{headings_data.get('h3', 0)} (Total: {total_headings})")
+        
+        if total_headings == 0:
+            print(f"   ⚠️ ZERO headings - possível lazy loading não resolvido")
         
         # Open Graph básico
         og_title_elem = await page.query_selector('meta[property="og:title"]')
@@ -202,8 +273,20 @@ async def extract_seo_data(page: Page, url: str) -> Dict:
         
     except Exception as e:
         print(f"   ❌ Erro extraindo SEO data de {url}: {e}")
-        return {'description': '', 'canonical': '', 'og_title': '', 'h1_ausente': True, 'h2_ausente': True}
-
+        return {
+            'description': '', 
+            'canonical': '', 
+            'og_title': '', 
+            'h1_ausente': True, 
+            'h2_ausente': True,
+            # Headings vazios
+            'h1': 0, 'h1_texts': [],
+            'h2': 0, 'h2_texts': [],
+            'h3': 0, 'h3_texts': [],
+            'h4': 0, 'h4_texts': [],
+            'h5': 0, 'h5_texts': [],
+            'h6': 0, 'h6_texts': []
+        }
 # ========================
 # 🔗 LINK EXTRACTOR SIMPLES
 # ========================
