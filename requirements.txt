@@ -1,5 +1,83 @@
-requests
-beautifulsoup4
-tqdm
-pandas
-openpyxl
+# requirements.txt
+playwright>=1.40.0
+beautifulsoup4>=4.12.0
+pandas>=2.0.0
+tqdm>=4.65.0
+lxml>=4.9.0
+requests>=2.31.0
+xlsxwriter>=3.1.0
+urllib3>=2.0.0
+
+# requirements-dev.txt (para desenvolvimento)
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+black>=23.0.0
+isort>=5.12.0
+mypy>=1.5.0
+
+# setup.py
+from setuptools import setup, find_packages
+
+setup(
+    name="seo-crawler-modular",
+    version="2.0.0",
+    description="Crawler SEO Enterprise Modular com Playwright",
+    author="SEO Team",
+    packages=find_packages(),
+    install_requires=[
+        "playwright>=1.40.0",
+        "beautifulsoup4>=4.12.0", 
+        "pandas>=2.0.0",
+        "tqdm>=4.65.0",
+        "lxml>=4.9.0",
+        "requests>=2.31.0",
+        "xlsxwriter>=3.1.0",
+        "urllib3>=2.0.0"
+    ],
+    extras_require={
+        "dev": [
+            "pytest>=7.4.0",
+            "pytest-asyncio>=0.21.0",
+            "black>=23.0.0",
+            "isort>=5.12.0",
+            "mypy>=1.5.0"
+        ]
+    },
+    python_requires=">=3.8",
+    entry_points={
+        "console_scripts": [
+            "seo-crawler=crawler_playwright:main",
+        ],
+    },
+)
+
+# install.py - Script de instalação automática
+import subprocess
+import sys
+import os
+
+def install_dependencies():
+    """🚀 Instala dependências automaticamente"""
+    
+    print("🚀 Instalando dependências do Crawler SEO Modular...")
+    
+    try:
+        # Instala requirements
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
+        print("✅ Dependências Python instaladas")
+        
+        # Instala browsers do Playwright
+        subprocess.check_call([sys.executable, "-m", "playwright", "install", "chromium"])
+        print("✅ Browser Chromium instalado")
+        
+        print("\n🎉 Instalação concluída com sucesso!")
+        print("💡 Para testar, execute: python crawler_playwright.py")
+        
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Erro na instalação: {e}")
+        print("💡 Tente instalar manualmente:")
+        print("   pip install -r requirements.txt")
+        print("   playwright install chromium")
+
+if __name__ == "__main__":
+    install_dependencies()

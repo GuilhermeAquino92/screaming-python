@@ -1,92 +1,276 @@
+# excel_manager.py - CORREÇÃO DEFINITIVA para Pipeline Híbrido
+
 import os
 import pandas as pd
-from exporters.sheets.resumo_sheet import ResumoSheet
-from exporters.sheets.status_http_sheet import StatusHTTPSheet
-from exporters.sheets.metatags_sheet import MetatagsSheet
-# from exporters.sheets.headings_sheet import HeadingsSheet  # 🗑️ REMOVIDA - funcionalidade substituída
-from exporters.sheets.headings_estrutura_sheet import HeadingsEstruturaSheet  # 🆕 Aba estrutura de headings
-from exporters.sheets.headings_vazios_sheet import HeadingsVaziosSheet  # 🆕 Versão limpa e profissional
-from exporters.sheets.h1_h2_problemas_sheet import H1H2ProblemasSheet  # 🆕 Nova aba H1/H2 PRIORITÁRIA
-from exporters.sheets.http_inseguro_sheet import HTTPInseguroSheet
-from exporters.sheets.auditoria_sheets import AuditoriaSheets
-from exporters.sheets.errors_sheet import ErrorsSheet
+import logging
+
+logger = logging.getLogger(__name__)
+
+def clean_dataframe_for_excel(df):
+    """🧹 Limpa DataFrame para exportação segura no Excel"""
+    
+    df_clean = df.copy()
+    logger.info(f"🧹 Limpando DataFrame: {len(df_clean)} linhas, {len(df_clean.columns)} colunas")
+    
+    for col in df_clean.columns:
+        if df_clean[col].dtype == 'object':
+            
+            def safe_clean_value(x):
+                """🛡️ Limpa valores individuais"""
+                if x is None or pd.isna(x):
+                    return ''
+                elif isinstance(x, (list, dict, tuple, set)):
+                    # Converte objetos complexos para string truncada
+                    str_repr = str(x)
+                    return str_repr[:300] + '...' if len(str_repr) > 300 else str_repr
+                elif isinstance(x, str):
+                    # Limpa strings problemáticas
+                    try:
+                        # Remove caracteres de controle
+                        clean_str = ''.join(char for char in x if ord(char) >= 32 or char in '\t\n\r')
+                        # Trunca se muito longo
+                        return clean_str[:500] + '...' if len(clean_str) > 500 else clean_str
+                    except:
+                        return str(x)[:500]
+                else:
+                    return str(x)
+            
+            # Aplica limpeza
+            original_sample = df_clean[col].dropna().head(1)
+            if not original_sample.empty:
+                sample_value = original_sample.iloc[0]
+                if isinstance(sample_value, (list, dict, tuple, set)):
+                    logger.warning(f"⚠️ Coluna {col} contém objetos complexos - convertendo para string")
+                
+            df_clean[col] = df_clean[col].apply(safe_clean_value)
+    
+    return df_clean
 
 def exportar_relatorio_completo(df, df_http, auditorias, output_path):
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    writer = pd.ExcelWriter(output_path, engine="xlsxwriter")
-    writer.book.default_url_format = writer.book.add_format({'font_color': 'black', 'underline': False})
-
-    # 📊 ABAS PRINCIPAIS (ordem estratégica para SEO)
-    print("📋 Gerando abas do relatório SEO...")
+    """📊 Exporta relatório completo com MÁXIMA SEGURANÇA contra corrupção"""
     
-    # 1. ABA RESUMO - Visão geral
-    ResumoSheet(df, writer).export()
-    print("   ✅ Aba 'Resumo' criada (visão geral)")
+    # 🛡️ VALIDAÇÃO ROBUSTA DO CAMINHO
+    try:
+        if not output_path or output_path.strip() == '':
+            raise ValueError("Caminho do arquivo não pode ser vazio")
+        
+        if not os.path.isabs(output_path):
+            output_path = os.path.abspath(output_path)
+        
+        diretorio_pai = os.path.dirname(output_path)
+        
+        if diretorio_pai and diretorio_pai != '' and not os.path.exists(diretorio_pai):
+            os.makedirs(diretorio_pai, exist_ok=True)
+            print(f"📁 Diretório criado: {diretorio_pai}")
+        
+        if not diretorio_pai or diretorio_pai == '':
+            output_path = os.path.join(os.getcwd(), os.path.basename(output_path))
+            print(f"💾 Usando diretório atual: {output_path}")
+        
+    except Exception as e:
+        print(f"⚠️ Erro na validação do caminho: {e}")
+        nome_arquivo = os.path.basename(output_path) if output_path else "relatorio_seo.xlsx"
+        output_path = os.path.join(os.getcwd(), nome_arquivo)
+        print(f"🔄 Fallback para: {output_path}")
     
-    # 2. ABA STATUS HTTP - Problemas técnicos críticos
-    StatusHTTPSheet(df, writer).export()
-    print("   ✅ Aba 'Status_HTTP' criada (problemas técnicos)")
-    
-    # 3. ABA METATAGS - SEO básico
-    MetatagsSheet(df, writer).export()
-    print("   ✅ Aba 'Metatags' criada (SEO básico)")
-    
-    # 🗑️ ABA HEADINGS ANTIGA REMOVIDA
-    # HeadingsSheet(df, writer).export()  # REMOVIDA - substituída pelas específicas abaixo
-    
-    # 4. 🆕 ABA ESTRUTURA DE HEADINGS - MÁXIMA PRIORIDADE SEO
-    HeadingsEstruturaSheet(df, writer).export()
-    print("   ✅ Aba 'Estrutura_Headings' criada (PRIORIDADE MÁXIMA)")
-    
-    # 5. 🆕 ABA H1/H2 PROBLEMAS - Textos duplicados entre páginas
-    H1H2ProblemasSheet(df, writer).export()
-    print("   ✅ Aba 'H1_H2_Problemas' criada (textos duplicados)")
-    
-    # 6. 🆕 ABA HEADINGS VAZIOS - Análise técnica detalhada com CSS
-    HeadingsVaziosSheet(df, writer, ordenacao_tipo='url_primeiro').export()
-    print("   ✅ Aba 'Headings_Vazios' criada (análise técnica CSS)")
-    
-    # 7. ABA HTTP INSEGURO - Problemas de segurança
-    HTTPInseguroSheet(df_http, writer).export()
-    print("   ✅ Aba 'HTTP_Inseguro' criada (segurança)")
-    
-    # 8. ABAS DE AUDITORIA - Problemas específicos de SEO (com Title_Ausente otimizada)
-    AuditoriaSheets(df, auditorias, writer).export()
-    print("   ✅ Abas de Auditoria criadas:")
-    
-    # 9. ABA ERRORS - Erros HTTP detalhados
-    ErrorsSheet(auditorias.get("df_errors", pd.DataFrame()), writer).export()
-    print("   ✅ Aba 'Errors_HTTP' criada (detalhamento de erros)")
-
-    writer.close()
-    print(f"\n🎉 RELATÓRIO SEO COMPLETO EXPORTADO PARA: {output_path}")
-    
-    print(f"\n📋 ESTRUTURA OTIMIZADA DO RELATÓRIO:")
-    print(f"   1️⃣ Resumo - Visão geral do site")
-    print(f"   2️⃣ Status_HTTP - Problemas técnicos (404, 500, etc.)")
-    print(f"   3️⃣ Metatags - Títulos e descrições")
-    print(f"   4️⃣ Estrutura_Headings - PRIORIDADE MÁXIMA:")
-    print(f"      🚫 H1 ausente (crítico)")
-    print(f"      🔄 H1 duplicado = múltiplas tags <h1> na mesma página (crítico)")
-    print(f"      📋 H2 ausente quando necessário (alto)")
-    print(f"      🏗️ Hierarquia quebrada: H1→H3→H2, H1→H4, etc. (alto)")
-    print(f"   5️⃣ H1_H2_Problemas - Textos iguais entre páginas:")
-    print(f"      🔄 H1/H2 com mesmo TEXTO em páginas diferentes")
-    print(f"      📊 URLs agrupadas por texto duplicado")
-    print(f"   6️⃣ Headings_Vazios - Análise técnica avançada:")
-    print(f"      🕳️ Detecção de headings vazios")
-    print(f"      🎨 Detecção de CSS que oculta headings (display:none, etc.)")
-    print(f"      📄 Análise detalhada de contexto e atributos")
-    print(f"   7️⃣ HTTP_Inseguro - Links http:// em páginas https://")
-    print(f"   8️⃣ Auditorias - OTIMIZADO:")
-    print(f"      📋 Title_Ausente - Análise profissional com prioridades")
-    print(f"      📋 Description_Ausente - Páginas sem meta description")
-    print(f"      🔄 Title_Duplicado - Títulos iguais entre páginas")
-    print(f"      🔄 Description_Duplicado - Descriptions iguais entre páginas")
-    print(f"   9️⃣ Errors_HTTP - Detalhamento completo de erros")
-    
-    print(f"\n🗑️ OTIMIZAÇÃO REALIZADA:")
-    print(f"   ❌ Aba 'Headings' antiga REMOVIDA (dados genéricos)")
-    print(f"   ✅ Substituída por 3 abas especializadas e altamente funcionais")
-    print(f"   🎯 Foco em problemas específicos e acionáveis para SEO")
-    print(f"   📊 Melhor organização e usabilidade do relatório")
+    try:
+        # 🧹 LIMPEZA CRÍTICA DOS DADOS
+        print("🧹 Limpando dados para exportação segura...")
+        df_clean = clean_dataframe_for_excel(df)
+        df_http_clean = clean_dataframe_for_excel(df_http) if not df_http.empty else df_http
+        
+        # Limpa auditorias
+        auditorias_clean = {}
+        for nome, df_aud in auditorias.items():
+            if df_aud is not None and not df_aud.empty:
+                auditorias_clean[nome] = clean_dataframe_for_excel(df_aud)
+            else:
+                auditorias_clean[nome] = df_aud
+        
+        print("✅ Limpeza de dados concluída")
+        
+        # 🔧 TENTA IMPORTAR EXPORTADORES ESPECIALIZADOS
+        try:
+            from exporters.sheets.resumo_sheet import ResumoSheet
+            from exporters.sheets.status_http_sheet import StatusHTTPSheet
+            from exporters.sheets.metatags_sheet import MetatagsSheet
+            from exporters.sheets.headings_estrutura_sheet import HeadingsEstruturaSheet
+            from exporters.sheets.headings_vazios_sheet import HeadingsVaziosSheet
+            from exporters.sheets.h1_h2_problemas_sheet import H1H2ProblemasSheet
+            from exporters.sheets.http_inseguro_sheet import HTTPInseguroSheet
+            from exporters.sheets.auditoria_sheets import AuditoriaSheets
+            from exporters.sheets.errors_sheet import ErrorsSheet
+            EXPORTERS_AVAILABLE = True
+            print("✅ Exportadores especializados disponíveis")
+        except ImportError as e:
+            print(f"⚠️ Exportadores especializados não disponíveis: {e}")
+            EXPORTERS_AVAILABLE = False
+        
+        print("📋 Iniciando exportação Excel com dados limpos...")
+        
+        # 🔒 CONTEXT MANAGER OBRIGATÓRIO + DADOS LIMPOS
+        with pd.ExcelWriter(output_path, engine="xlsxwriter") as writer:
+            
+            # Configurações básicas
+            if hasattr(writer, 'book'):
+                writer.book.default_url_format = writer.book.add_format({'font_color': 'black', 'underline': False})
+            
+            if EXPORTERS_AVAILABLE:
+                # 📊 VERSÃO COMPLETA COM DADOS LIMPOS
+                
+                # 1. ABA RESUMO
+                try:
+                    ResumoSheet(df_clean, writer).export()
+                    print("   ✅ Aba 'Resumo' criada")
+                except Exception as e:
+                    print(f"   ⚠️ Erro na aba Resumo, usando fallback: {e}")
+                    df_clean.to_excel(writer, sheet_name='Resumo', index=False)
+                
+                # 2. ABA STATUS HTTP
+                try:
+                    StatusHTTPSheet(df_clean, writer).export()
+                    print("   ✅ Aba 'Status_HTTP' criada")
+                except Exception as e:
+                    print(f"   ⚠️ Erro na aba Status_HTTP, usando fallback: {e}")
+                    basic_cols = [col for col in ['url', 'status_code_http', 'status_code'] if col in df_clean.columns]
+                    if basic_cols:
+                        df_clean[basic_cols].to_excel(writer, sheet_name='Status_HTTP', index=False)
+                
+                # 3. ABA METATAGS
+                try:
+                    MetatagsSheet(df_clean, writer).export()
+                    print("   ✅ Aba 'Metatags' criada")
+                except Exception as e:
+                    print(f"   ⚠️ Erro na aba Metatags, usando fallback: {e}")
+                    meta_cols = [col for col in ['url', 'title', 'description'] if col in df_clean.columns]
+                    if meta_cols:
+                        df_clean[meta_cols].to_excel(writer, sheet_name='Metatags', index=False)
+                
+                # 4-6. ABAS DE HEADINGS (com fallback individual)
+                heading_sheets = [
+                    ('HeadingsEstruturaSheet', 'Estrutura_Headings'),
+                    ('H1H2ProblemasSheet', 'H1_H2_Problemas'),
+                    ('HeadingsVaziosSheet', 'Headings_Vazios')
+                ]
+                
+                for sheet_class, sheet_name in heading_sheets:
+                    try:
+                        if sheet_class == 'HeadingsEstruturaSheet':
+                            HeadingsEstruturaSheet(df_clean, writer).export()
+                        elif sheet_class == 'H1H2ProblemasSheet':
+                            H1H2ProblemasSheet(df_clean, writer).export()
+                        elif sheet_class == 'HeadingsVaziosSheet':
+                            HeadingsVaziosSheet(df_clean, writer, ordenacao_tipo='url_primeiro').export()
+                        print(f"   ✅ Aba '{sheet_name}' criada")
+                    except Exception as e:
+                        print(f"   ⚠️ Erro na aba {sheet_name}, criando vazia: {e}")
+                        pd.DataFrame({'url': [], 'problema': []}).to_excel(writer, sheet_name=sheet_name[:31], index=False)
+                
+                # 7. ABA HTTP INSEGURO
+                try:
+                    HTTPInseguroSheet(df_http_clean, writer).export()
+                    print("   ✅ Aba 'HTTP_Inseguro' criada")
+                except Exception as e:
+                    print(f"   ⚠️ Erro na aba HTTP_Inseguro, usando fallback: {e}")
+                    if not df_http_clean.empty:
+                        df_http_clean.to_excel(writer, sheet_name='HTTP_Inseguro', index=False)
+                    else:
+                        pd.DataFrame({'url': [], 'problema': []}).to_excel(writer, sheet_name='HTTP_Inseguro', index=False)
+                
+                # 8. ABAS DE AUDITORIA
+                try:
+                    AuditoriaSheets(df_clean, auditorias_clean, writer).export()
+                    print("   ✅ Abas de Auditoria criadas")
+                except Exception as e:
+                    print(f"   ⚠️ Erro nas abas de Auditoria, usando fallback: {e}")
+                    # Fallback manual para auditorias
+                    for nome, df_aud in auditorias_clean.items():
+                        try:
+                            if df_aud is not None and not df_aud.empty:
+                                nome_aba = nome.replace('df_', '').replace('_', ' ').title()[:31]
+                                df_aud.to_excel(writer, sheet_name=nome_aba, index=False)
+                            else:
+                                nome_aba = nome.replace('df_', '').replace('_', ' ').title()[:31]
+                                pd.DataFrame({'url': []}).to_excel(writer, sheet_name=nome_aba, index=False)
+                        except Exception as e_aud:
+                            print(f"     ⚠️ Erro na auditoria {nome}: {e_aud}")
+                
+                # 9. ABA ERRORS
+                try:
+                    ErrorsSheet(auditorias_clean.get("df_errors", pd.DataFrame()), writer).export()
+                    print("   ✅ Aba 'Errors_HTTP' criada")
+                except Exception as e:
+                    print(f"   ⚠️ Erro na aba Errors_HTTP, usando fallback: {e}")
+                    if "df_errors" in auditorias_clean and not auditorias_clean["df_errors"].empty:
+                        auditorias_clean["df_errors"].to_excel(writer, sheet_name='Errors_HTTP', index=False)
+                    else:
+                        pd.DataFrame({'url': [], 'erro': []}).to_excel(writer, sheet_name='Errors_HTTP', index=False)
+            
+            else:
+                # 📋 VERSÃO BÁSICA COM DADOS LIMPOS
+                print("   🔄 Usando exportação básica com dados limpos...")
+                
+                # Aba principal
+                df_clean.to_excel(writer, sheet_name='Dados_Completos', index=False)
+                print("   ✅ Aba 'Dados_Completos' criada")
+                
+                # Abas de auditoria básicas
+                for nome, df_aud in auditorias_clean.items():
+                    try:
+                        if df_aud is not None and not df_aud.empty:
+                            nome_aba = nome.replace('df_', '').replace('_', ' ').title()[:31]
+                            df_aud.to_excel(writer, sheet_name=nome_aba, index=False)
+                            print(f"   ✅ Aba '{nome_aba}' criada")
+                        else:
+                            nome_aba = nome.replace('df_', '').replace('_', ' ').title()[:31]
+                            pd.DataFrame({'url': []}).to_excel(writer, sheet_name=nome_aba, index=False)
+                    except Exception as e_basic:
+                        print(f"   ⚠️ Erro na aba básica {nome}: {e_basic}")
+                
+                # HTTP Inseguro básico
+                try:
+                    if not df_http_clean.empty:
+                        df_http_clean.to_excel(writer, sheet_name='HTTP_Inseguro', index=False)
+                        print("   ✅ Aba 'HTTP_Inseguro' criada")
+                    else:
+                        pd.DataFrame({'url': []}).to_excel(writer, sheet_name='HTTP_Inseguro', index=False)
+                except Exception as e_http:
+                    print(f"   ⚠️ Erro na aba HTTP_Inseguro: {e_http}")
+            
+            # Context manager fecha automaticamente
+        
+        print(f"\n🎉 RELATÓRIO SEO EXPORTADO COM DADOS LIMPOS: {output_path}")
+        
+        # 🔍 VALIDAÇÃO FINAL
+        if os.path.exists(output_path):
+            tamanho_mb = os.path.getsize(output_path) / (1024 * 1024)
+            print(f"📁 Arquivo criado com sucesso ({tamanho_mb:.1f} MB)")
+            
+            # Validação adicional
+            try:
+                with pd.ExcelFile(output_path, engine='openpyxl') as test_file:
+                    num_sheets = len(test_file.sheet_names)
+                    print(f"✅ Arquivo validado: {num_sheets} abas criadas")
+                    print(f"📋 Abas: {', '.join(test_file.sheet_names)}")
+            except Exception as validation_error:
+                print(f"⚠️ Aviso na validação: {validation_error}")
+        else:
+            print(f"❌ Arquivo não foi criado: {output_path}")
+        
+        return output_path
+        
+    except Exception as e:
+        print(f"❌ Erro na criação do Excel: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        # 🚨 FALLBACK EXTREMO - CSV
+        try:
+            output_csv = output_path.replace('.xlsx', '.csv')
+            df_simple = clean_dataframe_for_excel(df)
+            df_simple.to_csv(output_csv, index=False, encoding='utf-8')
+            print(f"🔄 Dados salvos como CSV: {output_csv}")
+            return output_csv
+        except Exception as e2:
+            print(f"💥 Erro total na exportação: {e2}")
+            raise e2
