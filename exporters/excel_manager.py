@@ -117,7 +117,7 @@ def exportar_relatorio_completo(df, df_http, auditorias, output_path):
         
         print("✅ Limpeza de dados concluída")
         
-        # 🔧 IMPORTS DIRETOS - TODAS AS ENGINES CIRÚRGICAS
+        # 🔧 IMPORTS DIRETOS - TODAS AS ENGINES CIRÚRGICAS + 4 ENGINES DE ERROS
         try:
             from exporters.sheets.resumo_sheet import ResumoSheet
             from exporters.sheets.status_http_sheet import StatusHTTPSheet
@@ -128,11 +128,14 @@ def exportar_relatorio_completo(df, df_http, auditorias, output_path):
             from exporters.sheets.title_ausente_sheet import TitleAusenteSheet
             from exporters.sheets.description_ausente_sheet import DescriptionAusenteSheet
             from exporters.sheets.title_duplicado_sheet import TitleDuplicadoSheet
-            from exporters.sheets.description_duplicado_sheet import DescriptionDuplicadoSheet  # 🆕 NOVA CIRÚRGICA
+            from exporters.sheets.description_duplicado_sheet import DescriptionDuplicadoSheet
+            from exporters.sheets.redirects_3xx_sheet import Redirects3xxSheet  # 🆕 NOVA
+            from exporters.sheets.errors_5xx_sheet import Errors5xxSheet  # 🆕 NOVA
+            from exporters.sheets.errors_4xx_sheet import Errors4xxSheet  # 🆕 NOVA
+            from exporters.sheets.errors_http_sheet import ErrorsHTTPSheet  # 🆕 NOVA
             from exporters.sheets.http_inseguro_sheet import HTTPInseguroSheet
-            from exporters.sheets.errors_sheet import ErrorsSheet
             EXPORTERS_AVAILABLE = True
-            print("✅ Exportadores especializados disponíveis (TODAS AS ENGINES CIRÚRGICAS)")
+            print("✅ Exportadores especializados disponíveis (TODAS AS ENGINES + 4 ENGINES DE ERROS)")
         except ImportError as e:
             print(f"⚠️ Exportadores especializados não disponíveis: {e}")
             EXPORTERS_AVAILABLE = False
@@ -237,13 +240,37 @@ def exportar_relatorio_completo(df, df_http, auditorias, output_path):
                     print(f"   ⚠️ Erro na aba Description_Duplicado: {e}")
                     pd.DataFrame({'url': [], 'description': []}).to_excel(writer, sheet_name='Description_Duplicado', index=False)
                 
-                # 12. ABA ERRORS
+                # 12. ABA REDIRECTS 3XX CIRÚRGICA 🆕
                 try:
-                    ErrorsSheet(auditorias_clean.get("df_errors", pd.DataFrame()), writer).export()
-                    print("   ✅ Aba 'Errors_HTTP' criada")
+                    Redirects3xxSheet(df_clean, writer).export()
+                    print("   ✅ Aba 'Redirects_3xx' criada (CIRÚRGICA)")
+                except Exception as e:
+                    print(f"   ⚠️ Erro na aba Redirects_3xx: {e}")
+                    pd.DataFrame({'url': [], 'status': [], 'destino': []}).to_excel(writer, sheet_name='Redirects_3xx', index=False)
+                
+                # 13. ABA ERRORS 5XX CIRÚRGICA 🆕
+                try:
+                    Errors5xxSheet(df_clean, writer).export()
+                    print("   ✅ Aba 'Errors_5xx' criada (CIRÚRGICA)")
+                except Exception as e:
+                    print(f"   ⚠️ Erro na aba Errors_5xx: {e}")
+                    pd.DataFrame({'url': [], 'status': [], 'erro': []}).to_excel(writer, sheet_name='Errors_5xx', index=False)
+                
+                # 14. ABA ERRORS 4XX CIRÚRGICA 🆕
+                try:
+                    Errors4xxSheet(df_clean, writer).export()
+                    print("   ✅ Aba 'Errors_4xx' criada (CIRÚRGICA)")
+                except Exception as e:
+                    print(f"   ⚠️ Erro na aba Errors_4xx: {e}")
+                    pd.DataFrame({'url': [], 'status': [], 'erro': []}).to_excel(writer, sheet_name='Errors_4xx', index=False)
+                
+                # 15. ABA ERRORS HTTP CIRÚRGICA 🆕
+                try:
+                    ErrorsHTTPSheet(df_clean, writer).export()
+                    print("   ✅ Aba 'Errors_HTTP' criada (CIRÚRGICA)")
                 except Exception as e:
                     print(f"   ⚠️ Erro na aba Errors_HTTP: {e}")
-                    pd.DataFrame({'url': [], 'erro': []}).to_excel(writer, sheet_name='Errors_HTTP', index=False)
+                    pd.DataFrame({'url': [], 'erro': [], 'detalhes': []}).to_excel(writer, sheet_name='Errors_HTTP', index=False)
             
             else:
                 # 📋 FALLBACK BÁSICO
@@ -268,7 +295,7 @@ def exportar_relatorio_completo(df, df_http, auditorias, output_path):
                     print("   ✅ Aba 'HTTP_Inseguro' criada")
         
         print(f"\n🎉 RELATÓRIO SEO EXPORTADO - TODAS AS ENGINES CIRÚRGICAS: {output_path}")
-        print(f"🔥 10 ENGINES CIRÚRGICAS ATIVAS:")
+        print(f"🔥 14 ENGINES CIRÚRGICAS ATIVAS:")
         print(f"   1. Status_HTTP (verificação real)")
         print(f"   2. Metatags (análise SEO completa)")
         print(f"   3. Estrutura_Headings (H1 ausente, hierarquia)")
@@ -277,8 +304,12 @@ def exportar_relatorio_completo(df, df_http, auditorias, output_path):
         print(f"   6. Title_Ausente (tag ausente/vazia)")
         print(f"   7. Description_Ausente (meta description ausente/vazia)")
         print(f"   8. Title_Duplicado (com separadores visuais)")
-        print(f"   9. Description_Duplicado (com separadores visuais) 🆕")
-        print(f"   10. HTTP_Inseguro + Errors (básicas)")
+        print(f"   9. Description_Duplicado (com separadores visuais)")
+        print(f"   10. HTTP_Inseguro (links HTTP em HTTPS)")
+        print(f"   11. Redirects_3xx (301, 302, 307, 308) 🆕")
+        print(f"   12. Errors_5xx (500, 502, 503, 504) 🆕")
+        print(f"   13. Errors_4xx (400, 403, 404, 410) 🆕")
+        print(f"   14. Errors_HTTP (timeouts, DNS, SSL) 🆕")
         
         # 🔍 VALIDAÇÃO FINAL
         if os.path.exists(output_path):
