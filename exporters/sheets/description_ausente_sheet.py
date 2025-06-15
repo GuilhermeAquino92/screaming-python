@@ -1,5 +1,5 @@
-# exporters/sheets/title_ausente_sheet.py - CIRÚRGICO 2.0 (SÓ EXISTÊNCIA)
-# 🎯 ENGINE CIRÚRGICA 2.0: Detecta APENAS ausência/vazio de tags <title> - SEM heurísticas
+# exporters/sheets/description_ausente_sheet.py - CIRÚRGICO (SÓ EXISTÊNCIA)
+# 🎯 ENGINE CIRÚRGICA: Detecta APENAS ausência/vazio de meta description - SEM heurísticas
 
 import pandas as pd
 import requests
@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from exporters.base_exporter import BaseSheetExporter
 
-class TitleAusenteSheet(BaseSheetExporter):
+class DescriptionAusenteSheet(BaseSheetExporter):
     def __init__(self, df, writer):
         super().__init__(df, writer)
         self.session = self._criar_sessao_otimizada()
@@ -24,8 +24,8 @@ class TitleAusenteSheet(BaseSheetExporter):
         })
         return session
 
-    def _verificar_title_cirurgico(self, url: str) -> dict:
-        """🎯 Verificação CIRÚRGICA 2.0: SÓ existência da tag <title>"""
+    def _verificar_description_cirurgico(self, url: str) -> dict:
+        """🎯 Verificação CIRÚRGICA: SÓ existência da meta description"""
         
         try:
             response = self.session.get(url, timeout=10, verify=False)
@@ -33,33 +33,33 @@ class TitleAusenteSheet(BaseSheetExporter):
             
             soup = BeautifulSoup(response.content, 'html.parser')
             
-            # 🔎 BUSCA TAG <title>
-            title_tag = soup.find('title')
+            # 🔎 BUSCA META DESCRIPTION
+            description_tag = soup.find('meta', attrs={'name': 'description'})
             
-            if title_tag is None:
+            if description_tag is None:
                 # TAG AUSENTE
                 return {
                     'url': url,
                     'sucesso': True,
                     'tem_problema': True,
                     'tipo_problema': 'TAG_AUSENTE',
-                    'title_html': '[TAG NÃO ENCONTRADA]',
-                    'title_texto': '',
+                    'description_html': '[TAG NÃO ENCONTRADA]',
+                    'description_texto': '',
                     'gravidade': 'CRITICO'
                 }
             
-            # 🔎 EXTRAI TEXTO DA TAG
-            title_texto = title_tag.get_text().strip()
+            # 🔎 EXTRAI CONTENT DA TAG
+            description_content = description_tag.get('content', '').strip()
             
-            if not title_texto:
+            if not description_content:
                 # TAG VAZIA
                 return {
                     'url': url,
                     'sucesso': True,
                     'tem_problema': True,
                     'tipo_problema': 'TAG_VAZIA',
-                    'title_html': str(title_tag)[:200],
-                    'title_texto': '[VAZIO]',
+                    'description_html': str(description_tag)[:200],
+                    'description_texto': '[VAZIO]',
                     'gravidade': 'CRITICO'
                 }
             
@@ -69,8 +69,8 @@ class TitleAusenteSheet(BaseSheetExporter):
                 'sucesso': True,
                 'tem_problema': False,
                 'tipo_problema': 'OK',
-                'title_html': str(title_tag)[:200],
-                'title_texto': title_texto[:100],
+                'description_html': str(description_tag)[:200],
+                'description_texto': description_content[:100],
                 'gravidade': 'OK'
             }
             
@@ -81,8 +81,8 @@ class TitleAusenteSheet(BaseSheetExporter):
                 'erro': str(e),
                 'tem_problema': True,
                 'tipo_problema': 'ERRO_ACESSO',
-                'title_html': '[ERRO DE ACESSO]',
-                'title_texto': '',
+                'description_html': '[ERRO DE ACESSO]',
+                'description_texto': '',
                 'gravidade': 'ERRO'
             }
 
@@ -123,17 +123,17 @@ class TitleAusenteSheet(BaseSheetExporter):
         
         return list(set(urls_validas))  # Remove duplicatas
 
-    def _verificar_titles_paralelo(self, urls: list) -> list:
+    def _verificar_descriptions_paralelo(self, urls: list) -> list:
         """🚀 Verificação paralela cirúrgica"""
         
-        print(f"🎯 Verificação cirúrgica de titles iniciada: {len(urls)} URLs")
+        print(f"📝 Verificação cirúrgica de descriptions iniciada: {len(urls)} URLs")
         
         resultados = []
         
         with ThreadPoolExecutor(max_workers=15) as executor:
             # Submete todas as URLs
             future_to_url = {
-                executor.submit(self._verificar_title_cirurgico, url): url 
+                executor.submit(self._verificar_description_cirurgico, url): url 
                 for url in urls
             }
             
@@ -149,29 +149,29 @@ class TitleAusenteSheet(BaseSheetExporter):
         return resultados
 
     def export(self):
-        """🎯 Gera aba CIRÚRGICA 2.0 de titles ausentes (SÓ PROBLEMAS)"""
+        """📝 Gera aba CIRÚRGICA de descriptions ausentes (SÓ PROBLEMAS)"""
         try:
-            print(f"🎯 TITLE AUSENTE - ENGINE CIRÚRGICA 2.0")
+            print(f"📝 DESCRIPTION AUSENTE - ENGINE CIRÚRGICA")
             
             # 📋 PREPARAÇÃO DOS DADOS
-            urls_para_verificar = self.df['url'].dropna().unique().tolist()
-            urls_filtradas = self._filtrar_urls_validas(urls_para_verificar)
+            urls_filtradas = self._filtrar_urls_validas(self.df)
             
-            print(f"   📊 URLs inicial: {len(urls_para_verificar)}")
-            print(f"   🧹 URLs válidas: {len(urls_filtradas)}")
-            print(f"   🎯 Critério CIRÚRGICO: Tag <title> ausente OU vazia")
+            print(f"   📊 URLs no DataFrame: {len(self.df)}")
+            print(f"   🧹 URLs válidas (200 OK): {len(urls_filtradas)}")
+            print(f"   🎯 Critério CIRÚRGICO: Meta description ausente OU vazia")
             print(f"   ⚡ SEM análise de qualidade - só existência")
+            print(f"   🔍 FILTRO: Apenas páginas com status 200 OK")
             
             if not urls_filtradas:
                 print(f"   ⚠️ Nenhuma URL válida para verificação")
                 df_vazio = pd.DataFrame(columns=[
-                    'URL', 'Tipo_Problema', 'Title_HTML', 'Title_Texto', 'Gravidade'
+                    'URL', 'Tipo_Problema', 'Description_HTML', 'Description_Texto', 'Gravidade'
                 ])
-                df_vazio.to_excel(self.writer, index=False, sheet_name="Title_Ausente")
+                df_vazio.to_excel(self.writer, index=False, sheet_name="Description_Ausente")
                 return df_vazio
             
-            # 🎯 VERIFICAÇÃO CIRÚRGICA PARALELA
-            resultados = self._verificar_titles_paralelo(urls_filtradas)
+            # 📝 VERIFICAÇÃO CIRÚRGICA PARALELA
+            resultados = self._verificar_descriptions_paralelo(urls_filtradas)
             
             # 📋 GERA LINHAS APENAS PARA PROBLEMAS REAIS
             rows = []
@@ -182,18 +182,18 @@ class TitleAusenteSheet(BaseSheetExporter):
                     rows.append({
                         'URL': resultado['url'],
                         'Tipo_Problema': resultado['tipo_problema'],
-                        'Title_HTML': resultado['title_html'],
-                        'Title_Texto': resultado['title_texto'],
+                        'Description_HTML': resultado['description_html'],
+                        'Description_Texto': resultado['description_texto'],
                         'Gravidade': resultado['gravidade']
                     })
             
             # Se não encontrou problemas
             if not rows:
-                print(f"   🎉 PERFEITO: Todas as páginas têm tags <title> com conteúdo!")
+                print(f"   🎉 PERFEITO: Todas as páginas têm meta description com conteúdo!")
                 df_vazio = pd.DataFrame(columns=[
-                    'URL', 'Tipo_Problema', 'Title_HTML', 'Title_Texto', 'Gravidade'
+                    'URL', 'Tipo_Problema', 'Description_HTML', 'Description_Texto', 'Gravidade'
                 ])
-                df_vazio.to_excel(self.writer, index=False, sheet_name="Title_Ausente")
+                df_vazio.to_excel(self.writer, index=False, sheet_name="Description_Ausente")
                 return df_vazio
             
             df_problemas = pd.DataFrame(rows)
@@ -205,7 +205,7 @@ class TitleAusenteSheet(BaseSheetExporter):
             df_problemas = df_problemas.drop('sort_gravidade', axis=1)
             
             # 📤 EXPORTA
-            df_problemas.to_excel(self.writer, index=False, sheet_name="Title_Ausente")
+            df_problemas.to_excel(self.writer, index=False, sheet_name="Description_Ausente")
             
             # 📊 ESTATÍSTICAS CIRÚRGICAS
             urls_verificadas = len([r for r in resultados if r.get('sucesso', False)])
@@ -218,29 +218,24 @@ class TitleAusenteSheet(BaseSheetExporter):
             erro_acesso = len([r for r in rows if r['Tipo_Problema'] == 'ERRO_ACESSO'])
             
             print(f"   ✅ URLs verificadas: {urls_verificadas}")
-            print(f"   🎯 URLs com problemas: {urls_com_problemas}")
-            print(f"   ✨ URLs perfeitas (title OK): {urls_perfeitas}")
-            print(f"      🚫 Tag <title> ausente: {tag_ausente}")
-            print(f"      🕳️ Tag <title> vazia: {tag_vazia}")
+            print(f"   📝 URLs com problemas: {urls_com_problemas}")
+            print(f"   ✨ URLs perfeitas (description OK): {urls_perfeitas}")
+            print(f"      🚫 Meta description ausente: {tag_ausente}")
+            print(f"      🕳️ Meta description vazia: {tag_vazia}")
             print(f"      ❌ Erro de acesso: {erro_acesso}")
-            print(f"   📋 Aba 'Title_Ausente' criada com critério CIRÚRGICO 2.0")
+            print(f"   📋 Aba 'Description_Ausente' criada com critério CIRÚRGICO")
             print(f"   🛡️ Zero falsos positivos - só ausência/vazio real")
             
             return df_problemas
             
         except Exception as e:
-            print(f"❌ Erro no engine cirúrgico 2.0: {e}")
+            print(f"❌ Erro no engine cirúrgico description: {e}")
             import traceback
             traceback.print_exc()
             
             # Fallback
             df_erro = pd.DataFrame(columns=[
-                'URL', 'Tipo_Problema', 'Title_HTML', 'Title_Texto', 'Gravidade'
+                'URL', 'Tipo_Problema', 'Description_HTML', 'Description_Texto', 'Gravidade'
             ])
-            df_erro.to_excel(self.writer, index=False, sheet_name="Title_Ausente")
+            df_erro.to_excel(self.writer, index=False, sheet_name="Description_Ausente")
             return df_erro
-
-# Aliases para compatibilidade
-TitleAusenteSheetCirurgico = TitleAusenteSheet
-TitleAusenteSheetSemantico = TitleAusenteSheet
-TitleAusenteSheetHardened = TitleAusenteSheet

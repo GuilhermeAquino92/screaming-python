@@ -11,7 +11,6 @@ from urllib.parse import urlparse
 from crawler import rastrear_profundo as crawler_requests
 from status_checker import verificar_status_http
 from metatags import extrair_metatags
-from validador_headings import validar_headings
 from http_inseguro import extrair_http_inseguros
 
 # Excel Manager
@@ -240,91 +239,6 @@ def analisar_distribuicao_tipos_url_simples(df):
     return tipos_url
 
 # ========================
-# 🔥 PATCH HÍBRIDO (ORIGINAL)
-# ========================
-
-def aplicar_patch_headings_hibrido(excel_path: str) -> str:
-    """🔥 Aplica patch híbrido para headings vazios"""
-    
-    try:
-        print(f"\n🔥 APLICANDO PATCH HÍBRIDO HEADINGS...")
-        print(f"📁 Arquivo: {excel_path}")
-        
-        # Import do revalidador
-        from revalidador_headings_hibrido import RevalidadorHeadingsHibridoOtimizado as RevalidadorHeadingsHibrido        
-        # Aplica patch
-        revalidador = RevalidadorHeadingsHibrido()
-        excel_corrigido = revalidador.revalidar_excel_completo(
-            excel_path, 
-            excel_path.replace('.xlsx', '_HIBRIDO.xlsx')
-        )
-        
-        print(f"✅ PATCH HÍBRIDO APLICADO!")
-        print(f"📁 Arquivo corrigido: {excel_corrigido}")
-        
-        return excel_corrigido
-        
-    except Exception as e:
-        print(f"❌ Erro no patch híbrido: {e}")
-        print(f"📋 Mantendo arquivo original: {excel_path}")
-        return excel_path
-
-# ========================
-# 🔥 PATCH CIRÚRGICO COMPLETO
-# ========================
-
-def aplicar_patch_cirurgico_completo(excel_path: str) -> str:
-    """🔥 Aplica patch CIRÚRGICO completo AUTOMÁTICO: headings + titles"""
-    
-    try:
-        print(f"🔥 PATCH CIRÚRGICO AUTOMÁTICO INICIADO")
-        print(f"📁 Arquivo base: {excel_path}")
-        
-        # 1. PATCH HEADINGS CIRÚRGICO (AUTOMÁTICO)
-        print(f"\n🎯 1/2 - HEADINGS VAZIOS CIRÚRGICO (AUTOMÁTICO):")
-        from revalidador_headings_hibrido import revalidar_headings_excel_cirurgico
-        
-        excel_com_headings = revalidar_headings_excel_cirurgico(
-            excel_path, 
-            excel_path.replace('.xlsx', '_TEMP_HEADINGS.xlsx')
-        )
-        
-        # 2. PATCH TITLES CIRÚRGICO (AUTOMÁTICO) - COM FALLBACK
-        print(f"\n🎯 2/2 - TITLES AUSENTES CIRÚRGICO (AUTOMÁTICO):")
-        try:
-            from revalidador_title_cirurgico import revalidar_titles_excel_cirurgico
-            
-            excel_final = revalidar_titles_excel_cirurgico(
-                excel_com_headings,
-                excel_path.replace('.xlsx', '_CIRURGICO_COMPLETO.xlsx')
-            )
-            print(f"✅ Patch de titles aplicado com sucesso!")
-            
-        except ImportError as e:
-            print(f"⚠️ Módulo de titles não disponível: {e}")
-            print(f"📋 Continuando apenas com patch de headings...")
-            excel_final = excel_com_headings
-        
-        # 3. LIMPA ARQUIVO TEMPORÁRIO
-        try:
-            if os.path.exists(excel_com_headings) and 'TEMP' in excel_com_headings:
-                os.remove(excel_com_headings)
-                print(f"🗑️ Arquivo temporário removido")
-        except:
-            pass
-        
-        print(f"\n✅ PATCH CIRÚRGICO AUTOMÁTICO CONCLUÍDO!")
-        print(f"📁 Arquivo final: {excel_final}")
-        print(f"🎯 Contém: Headings Vazios (+ Titles se disponível)")
-        
-        return excel_final
-        
-    except Exception as e:
-        print(f"❌ Erro no patch cirúrgico: {e}")
-        print(f"📋 Mantendo arquivo original: {excel_path}")
-        return excel_path
-
-# ========================
 # 🎯 MAIN PIPELINE
 # ========================
 
@@ -380,9 +294,6 @@ async def main_pipeline():
             if f'{col}_pw' in df.columns:
                 df[col] = df[f'{col}_pw'].fillna(df[col])
                 df = df.drop(f'{col}_pw', axis=1)
-    
-    # Headings - REMOVIDO (patch cirúrgico faz melhor depois)
-    print(f"🏷️ Headings serão validados no patch cirúrgico (mais preciso)...")
     
     # HTTP Inseguro
     print(f"🔒 Analisando HTTP inseguro...")
@@ -448,8 +359,8 @@ async def main_pipeline():
     print(f"🔄 Title duplicado: {len(df_title_duplicado)}")
     print(f"🔄 Description duplicado: {len(df_description_duplicado)}")
     
-    # 📤 FASE 6: EXPORTAÇÃO
-    print(f"\n📤 FASE 6: EXPORTAÇÃO")
+    # 📤 FASE 6: EXPORTAÇÃO COM ENGINES CIRÚRGICAS
+    print(f"\n📤 FASE 6: EXPORTAÇÃO COM ENGINES CIRÚRGICAS")
     
     auditorias = {
         "df_title_ausente": df_title_ausente,
@@ -464,24 +375,22 @@ async def main_pipeline():
     df['crawler_version'] = 'pipeline_lean_v1.0'
     df['analise_timestamp'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
-    # Exportação segura
+    # Exportação com engines cirúrgicas integradas
     try:
         if not os.path.isabs(ARQUIVO_SAIDA):
             arquivo_final = os.path.join(os.getcwd(), os.path.basename(ARQUIVO_SAIDA))
         else:
             arquivo_final = ARQUIVO_SAIDA
         
-        # 📤 EXPORTAÇÃO INICIAL
-        excel_inicial = exportar_relatorio_completo(df, df_http, auditorias, ARQUIVO_SAIDA)
-        print(f"✅ Relatório inicial exportado: {excel_inicial}")
-
-        # ✅ EXPORTAÇÃO COM ANÁLISE COMPLETA (usa excel_manager existente)
-        print(f"\n📊 EXPORTANDO RELATÓRIO COMPLETO...")
-        print(f"   ✅ Usa estrutura existente do excel_manager.py")
-        print(f"   📋 Abas: Headings_Vazios, Estrutura_Headings, H1_H2_Problemas")
-        print(f"   🎯 Sistema integrado - sem duplicação!")
-
-        arquivo_final = excel_inicial
+        # 🔥 EXPORTAÇÃO COM ENGINES CIRÚRGICAS
+        print(f"🔥 Gerando relatório com ENGINES CIRÚRGICAS integradas...")
+        print(f"   ✅ Headings_Vazios: Lixo estrutural real (DOM parsing)")
+        print(f"   ✅ Estrutura_Headings: Análise H1-H6 completa")
+        print(f"   ✅ Title_Ausente: Validação cirúrgica de titles")
+        print(f"   ✅ H1_H2_Problemas: Duplicação real entre páginas")
+        
+        arquivo_final = exportar_relatorio_completo(df, df_http, auditorias, ARQUIVO_SAIDA)
+        print(f"✅ Relatório com engines cirúrgicas exportado: {arquivo_final}")
         
     except Exception as e:
         print(f"❌ Erro na exportação: {e}")
@@ -500,6 +409,7 @@ async def main_pipeline():
     print(f"🎯 Método: {metodo_usado}")
     print(f"📊 URLs: {len(df)}")
     print(f"📈 Tipos identificados: {len(tipos_url)}")
+    print(f"🔥 ENGINES CIRÚRGICAS: 4 abas com análise DOM real")
     
     # Recomendações simples
     print(f"\n💡 RECOMENDAÇÕES:")
