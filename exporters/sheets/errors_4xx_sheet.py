@@ -1,5 +1,6 @@
-# exporters/sheets/errors_4xx_sheet.py - ENGINE CIRÚRGICA
-# ❌ ENGINE CIRÚRGICA: Análise completa de erros 4xx para correção de conteúdo
+# exporters/sheets/errors_4xx_sheet.py - ENGINE CIRÚRGICA v3.0 HARDENED
+# ❌ ENGINE CIRÚRGICA: Erros 4xx + URL SANITIZER INTEGRADO
+# 🔧 v3.0: PARA DE SER COVARDE - sanitiza URLs sem protocolo e TENTA!
 
 import pandas as pd
 import requests
@@ -163,30 +164,127 @@ class Errors4xxSheet(BaseSheetExporter):
         else:
             return 'Página regular'
 
-    def _filtrar_urls_validas(self, urls_df) -> list:
-        """🧹 Remove URLs inválidas"""
+    def _sanitizar_url_hardened(self, url_raw: str) -> str:
+        """🔧 SANITIZER v3.0: PARA DE SER COVARDE - força HTTPS e tenta!"""
+        
+        if not url_raw or pd.isna(url_raw):
+            return None
+        
+        url = str(url_raw).strip()
+        
+        if not url:
+            return None
+        
+        # 🔧 STEP 1: Remove espaços e caracteres problemáticos
+        import re
+        url = re.sub(r'\s+', '', url)  # Remove todos os espaços
+        url = url.replace('\n', '').replace('\r', '').replace('\t', '')
+        
+        # 🔧 STEP 2: Corrige protocolos malformados
+        if url.startswith('http//') or url.startswith('https//'):
+            url = url.replace('//', '://', 1)
+        
+        # 🔧 STEP 3: FORÇA HTTPS se não tem protocolo (HARDENED!)
+        if not url.startswith(('http://', 'https://')):
+            # Se parece com domínio, força https://
+            if '.' in url and not url.startswith(('/', '#', '?')):
+                url = f"https://{url}"
+            else:
+                return None  # URL inválida
+        
+        # 🔧 STEP 4: Remove fragmentos e parâmetros problemáticos
+        if '#' in url:
+            url = url.split('#')[0]
+        
+        # 🔧 STEP 5: Normaliza múltiplas barras
+        if '://' in url:
+            protocol, rest = url.split('://', 1)
+            rest = re.sub(r'/+', '/', rest)  # Remove múltiplas barras
+            url = f"{protocol}://{rest}"
+        
+        # 🔧 STEP 6: Remove barra final desnecessária
+        if url.endswith('/') and url.count('/') > 3:
+            url = url.rstrip('/')
+        
+        # 🔧 STEP 7: Valida URL final
+        if len(url) > 2000:  # URLs muito longas
+            return None
+        
+        if not ('.' in url and ('://' in url)):
+            return None
+        
+        return url
+
+    def _filtrar_urls_validas(self, urls_input) -> list:
+        """🧹 HARDENED v3.0: SANITIZA e NÃO É MAIS COVARDE!"""
+        
+        # 🔧 EXTRAÇÃO UNIVERSAL DE URLs
+        urls_candidatas = []
+        
+        if isinstance(urls_input, pd.DataFrame):
+            urls_candidatas = urls_input
+        elif isinstance(urls_input, (list, pd.Series)):
+            df_mock = pd.DataFrame({'url': urls_input})
+            urls_candidatas = df_mock
+        else:
+            try:
+                df_mock = pd.DataFrame({'url': list(urls_input)})
+                urls_candidatas = df_mock
+            except:
+                print(f"⚠️ Erro: Não conseguiu processar input tipo {type(urls_input)}")
+                return []
+        
         urls_validas = []
+        stats = {'total': 0, 'sanitizadas': 0, 'forcadas_https': 0, 'descartadas': 0}
         
-        for _, row in urls_df.iterrows():
-            url = row.get('url', '')
+        for _, row in urls_candidatas.iterrows():
+            url_raw = row.get('url', '')
+            stats['total'] += 1
             
-            if not url or pd.isna(url):
+            if not url_raw or pd.isna(url_raw):
+                stats['descartadas'] += 1
                 continue
             
-            url_str = str(url).strip()
+            # 🔧 SANITIZAÇÃO HARDENED
+            url_sanitizada = self._sanitizar_url_hardened(url_raw)
             
-            # Filtros básicos
-            if not url_str.startswith(('http://', 'https://')):
+            if not url_sanitizada:
+                stats['descartadas'] += 1
                 continue
             
-            urls_validas.append(url_str)
+            # Conta estatísticas
+            if url_sanitizada != str(url_raw).strip():
+                stats['sanitizadas'] += 1
+                
+            if not str(url_raw).strip().startswith(('http://', 'https://')) and url_sanitizada.startswith('https://'):
+                stats['forcadas_https'] += 1
+            
+            # 🔧 Remove extensões que raramente dão 4xx úteis
+            if any(url_sanitizada.lower().endswith(ext) for ext in [
+                '.jpg', '.jpeg', '.png', '.gif', '.svg', '.ico',
+                '.css', '.js', '.woff', '.woff2', '.ttf'
+            ]):
+                stats['descartadas'] += 1
+                continue
+            
+            urls_validas.append(url_sanitizada)
         
-        return list(set(urls_validas))  # Remove duplicatas
+        # Remove duplicatas finais
+        urls_unicas = list(set(urls_validas))
+        
+        print(f"   🔧 SANITIZAÇÃO HARDENED v3.0:")
+        print(f"      📊 Total processadas: {stats['total']}")
+        print(f"      🔧 URLs sanitizadas: {stats['sanitizadas']}")
+        print(f"      🚀 Forçadas para HTTPS: {stats['forcadas_https']}")
+        print(f"      ❌ Descartadas: {stats['descartadas']}")
+        print(f"      ✅ URLs válidas únicas: {len(urls_unicas)}")
+        
+        return urls_unicas
 
     def _analisar_errors_4xx_paralelo(self, urls: list) -> list:
         """🚀 Análise paralela de erros 4xx"""
         
-        print(f"❌ Análise de erros 4xx iniciada: {len(urls)} URLs")
+        print(f"❌ Análise HARDENED de erros 4xx iniciada: {len(urls)} URLs")
         
         resultados = []
         
@@ -209,25 +307,21 @@ class Errors4xxSheet(BaseSheetExporter):
         return resultados
 
     def export(self):
-        """❌ Gera aba CIRÚRGICA de erros 4xx"""
+        """❌ Gera aba CIRÚRGICA HARDENED de erros 4xx"""
         try:
-            print(f"❌ ERRORS 4XX - ENGINE CIRÚRGICA")
+            print(f"❌ ERRORS 4XX - ENGINE CIRÚRGICA v3.0 HARDENED")
             
-            # 📋 PREPARAÇÃO DOS DADOS
+            # 📋 PREPARAÇÃO DOS DADOS COM SANITIZAÇÃO
             urls_filtradas = self._filtrar_urls_validas(self.df)
             
-            print(f"   📊 URLs no DataFrame: {len(self.df)}")
-            print(f"   🧹 URLs válidas: {len(urls_filtradas)}")
+            print(f"   📊 URLs no DataFrame: {len(self.df) if hasattr(self.df, '__len__') else 'N/A'}")
             print(f"   🎯 Foco: Erros 4xx (404, 403, 401, 410) para correção de conteúdo")
+            print(f"   🔧 v3.0: URL Sanitizer integrado - PARA DE SER COVARDE!")
             
             if not urls_filtradas:
-                print(f"   ⚠️ Nenhuma URL válida para análise")
-                df_vazio = pd.DataFrame(columns=[
-                    'URL', 'Status', 'Tipo_Erro', 'Prioridade', 'Tempo_Resposta', 
-                    'Content_Type', 'Tem_Pagina_Erro', 'Sugestao_Acao', 'Possivel_Origem'
-                ])
-                df_vazio.to_excel(self.writer, index=False, sheet_name="Errors_4xx")
-                return df_vazio
+                print(f"   ⚠️ Nenhuma URL válida após sanitização")
+                self._criar_aba_vazia()
+                return pd.DataFrame()
             
             # ❌ ANÁLISE CIRÚRGICA PARALELA
             resultados = self._analisar_errors_4xx_paralelo(urls_filtradas)
@@ -253,12 +347,8 @@ class Errors4xxSheet(BaseSheetExporter):
             # Se não encontrou erros 4xx
             if not rows:
                 print(f"   🎉 PERFEITO: Nenhum erro 4xx encontrado!")
-                df_vazio = pd.DataFrame(columns=[
-                    'URL', 'Status', 'Tipo_Erro', 'Prioridade', 'Tempo_Resposta', 
-                    'Content_Type', 'Tem_Pagina_Erro', 'Sugestao_Acao', 'Possivel_Origem'
-                ])
-                df_vazio.to_excel(self.writer, index=False, sheet_name="Errors_4xx")
-                return df_vazio
+                self._criar_aba_vazia()
+                return pd.DataFrame()
             
             df_errors = pd.DataFrame(rows)
             
@@ -290,20 +380,23 @@ class Errors4xxSheet(BaseSheetExporter):
             for prioridade, count in stats_prioridade.items():
                 print(f"      • Prioridade {prioridade}: {count} erros")
             
-            print(f"   📋 Aba 'Errors_4xx' criada com análise CIRÚRGICA")
-            print(f"   🎯 Foco em correção de conteúdo e URLs")
+            print(f"   📋 Aba 'Errors_4xx' criada com análise CIRÚRGICA HARDENED")
+            print(f"   🎯 Agora captura URLs sem protocolo que eram jogadas fora!")
             
             return df_errors
             
         except Exception as e:
-            print(f"❌ Erro no engine cirúrgico 4xx: {e}")
+            print(f"❌ Erro no engine cirúrgico 4xx v3.0: {e}")
             import traceback
             traceback.print_exc()
             
-            # Fallback
-            df_erro = pd.DataFrame(columns=[
-                'URL', 'Status', 'Tipo_Erro', 'Prioridade', 'Tempo_Resposta', 
-                'Content_Type', 'Tem_Pagina_Erro', 'Sugestao_Acao', 'Possivel_Origem'
-            ])
-            df_erro.to_excel(self.writer, index=False, sheet_name="Errors_4xx")
-            return df_erro
+            self._criar_aba_vazia()
+            return pd.DataFrame()
+
+    def _criar_aba_vazia(self):
+        """📋 Cria aba vazia quando não há dados"""
+        df_vazio = pd.DataFrame(columns=[
+            'URL', 'Status', 'Tipo_Erro', 'Prioridade', 'Tempo_Resposta', 
+            'Content_Type', 'Tem_Pagina_Erro', 'Sugestao_Acao', 'Possivel_Origem'
+        ])
+        df_vazio.to_excel(self.writer, index=False, sheet_name="Errors_4xx")

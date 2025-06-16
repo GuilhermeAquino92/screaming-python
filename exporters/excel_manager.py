@@ -1,4 +1,4 @@
-# excel_manager.py - COMPLETO COM ENGINES CIRÚRGICAS - VERSÃO CORRIGIDA
+# excel_manager.py - ATUALIZADO COM MIXED CONTENT SHEET ENGINE
 
 import os
 import pandas as pd
@@ -75,7 +75,7 @@ def clean_dataframe_for_excel(df):
     return df_clean
 
 def exportar_relatorio_completo(df, df_http, auditorias, output_path):
-    """📊 Exporta relatório completo - TODAS AS ENGINES CIRÚRGICAS"""
+    """📊 Exporta relatório completo - TODAS AS ENGINES CIRÚRGICAS + MIXED CONTENT"""
     
     # 🛡️ VALIDAÇÃO ROBUSTA DO CAMINHO
     try:
@@ -117,7 +117,7 @@ def exportar_relatorio_completo(df, df_http, auditorias, output_path):
         
         print("✅ Limpeza de dados concluída")
         
-        # 🔧 IMPORTS DIRETOS - TODAS AS ENGINES CIRÚRGICAS + 4 ENGINES DE ERROS
+        # 🔧 IMPORTS DIRETOS - TODAS AS ENGINES CIRÚRGICAS + MIXED CONTENT SHEET
         try:
             from exporters.sheets.resumo_sheet import ResumoSheet
             from exporters.sheets.status_http_sheet import StatusHTTPSheet
@@ -129,19 +129,21 @@ def exportar_relatorio_completo(df, df_http, auditorias, output_path):
             from exporters.sheets.description_ausente_sheet import DescriptionAusenteSheet
             from exporters.sheets.title_duplicado_sheet import TitleDuplicadoSheet
             from exporters.sheets.description_duplicado_sheet import DescriptionDuplicadoSheet
-            from exporters.sheets.redirects_3xx_sheet import Redirects3xxSheet  # 🆕 NOVA
-            from exporters.sheets.errors_5xx_sheet import Errors5xxSheet  # 🆕 NOVA
-            from exporters.sheets.errors_4xx_sheet import Errors4xxSheet  # 🆕 NOVA
-            from exporters.sheets.errors_http_sheet import ErrorsHTTPSheet  # 🆕 NOVA
-            from exporters.sheets.ssl_problemas_sheet import SSLProblemasSheet  # 🆕 NOVA SSL
+            from exporters.sheets.redirects_3xx_sheet import Redirects3xxSheet
+            from exporters.sheets.errors_5xx_sheet import Errors5xxSheet
+            from exporters.sheets.errors_4xx_sheet import Errors4xxSheet
+            from exporters.sheets.errors_http_sheet import ErrorsHTTPSheet
+            from exporters.sheets.ssl_problemas_sheet import SSLProblemasSheet
             from exporters.sheets.http_inseguro_sheet import HTTPInseguroSheet
+            # 🔒 NOVA SHEET ENGINE - SIMPLES E LIMPA
+            from exporters.sheets.mixed_content_sheet import MixedContentSheet
             EXPORTERS_AVAILABLE = True
-            print("✅ Exportadores especializados disponíveis (TODAS AS ENGINES + 4 ENGINES DE ERROS)")
+            print("✅ Exportadores especializados disponíveis (TODAS AS ENGINES + MIXED CONTENT)")
         except ImportError as e:
             print(f"⚠️ Exportadores especializados não disponíveis: {e}")
             EXPORTERS_AVAILABLE = False
         
-        print("📋 Iniciando exportação Excel - VERSÃO CIRÚRGICA COMPLETA...")
+        print("📋 Iniciando exportação Excel - VERSÃO CIRÚRGICA COMPLETA + MIXED CONTENT...")
         
         # 🔒 CONTEXT MANAGER + TODAS AS ABAS DIRETAS
         with pd.ExcelWriter(output_path, engine="xlsxwriter") as writer:
@@ -183,7 +185,7 @@ def exportar_relatorio_completo(df, df_http, auditorias, output_path):
                     except:
                         pd.DataFrame({'url': [], 'title': [], 'description': []}).to_excel(writer, sheet_name='Metatags', index=False)
                 
-                # 4. ABA HEADINGS ESTRUTURA CIRÚRGICA
+                # 4. ABA ESTRUTURA HEADINGS CIRÚRGICA
                 try:
                     HeadingsEstruturaSheet(df_clean, writer).export()
                     print("   ✅ Aba 'Estrutura_Headings' criada (CIRÚRGICA)")
@@ -192,9 +194,9 @@ def exportar_relatorio_completo(df, df_http, auditorias, output_path):
                     try:
                         HeadingsEstruturaSheet(df_clean, writer)._criar_aba_vazia()
                     except:
-                        pd.DataFrame({'url': [], 'problema': []}).to_excel(writer, sheet_name='Estrutura_Headings', index=False)
+                        pd.DataFrame({'url': [], 'estrutura': []}).to_excel(writer, sheet_name='Estrutura_Headings', index=False)
                 
-                # 5. ABA H1/H2 PROBLEMAS CIRÚRGICA
+                # 5. ABA H1 H2 PROBLEMAS CIRÚRGICA
                 try:
                     H1H2ProblemasSheet(df_clean, writer).export()
                     print("   ✅ Aba 'H1_H2_Problemas' criada (CIRÚRGICA)")
@@ -214,7 +216,7 @@ def exportar_relatorio_completo(df, df_http, auditorias, output_path):
                     try:
                         HeadingsVaziosSheet(df_clean, writer)._criar_aba_vazia()
                     except:
-                        pd.DataFrame({'url': [], 'problema': []}).to_excel(writer, sheet_name='Headings_Vazios', index=False)
+                        pd.DataFrame({'url': [], 'heading_vazio': []}).to_excel(writer, sheet_name='Headings_Vazios', index=False)
                 
                 # 7. ABA TITLE AUSENTE CIRÚRGICA
                 try:
@@ -238,40 +240,40 @@ def exportar_relatorio_completo(df, df_http, auditorias, output_path):
                     except:
                         pd.DataFrame({'url': [], 'problema': []}).to_excel(writer, sheet_name='Description_Ausente', index=False)
                 
-                # 9. ABA TITLE DUPLICADO CIRÚRGICA 🆕
+                # 9. ABA TITLE DUPLICADO CIRÚRGICA
                 try:
                     TitleDuplicadoSheet(df_clean, writer).export()
-                    print("   ✅ Aba 'Title_Duplicado' criada (CIRÚRGICA COM SEPARADORES)")
+                    print("   ✅ Aba 'Title_Duplicado' criada (CIRÚRGICA)")
                 except Exception as e:
                     print(f"   ⚠️ Erro na aba Title_Duplicado: {e}")
                     try:
                         TitleDuplicadoSheet(df_clean, writer)._criar_aba_vazia()
                     except:
-                        pd.DataFrame({'url': [], 'title': []}).to_excel(writer, sheet_name='Title_Duplicado', index=False)
+                        pd.DataFrame({'url': [], 'title_duplicado': []}).to_excel(writer, sheet_name='Title_Duplicado', index=False)
                 
-                # 10. ABA HTTP INSEGURO
-                try:
-                    HTTPInseguroSheet(df_http_clean, writer).export()
-                    print("   ✅ Aba 'HTTP_Inseguro' criada")
-                except Exception as e:
-                    print(f"   ⚠️ Erro na aba HTTP_Inseguro: {e}")
-                    try:
-                        HTTPInseguroSheet(df_http_clean, writer)._criar_aba_vazia()
-                    except:
-                        pd.DataFrame({'url': [], 'problema': []}).to_excel(writer, sheet_name='HTTP_Inseguro', index=False)
-                
-                # 11. ABA DESCRIPTION DUPLICADO CIRÚRGICA 🆕
+                # 10. ABA DESCRIPTION DUPLICADO CIRÚRGICA
                 try:
                     DescriptionDuplicadoSheet(df_clean, writer).export()
-                    print("   ✅ Aba 'Description_Duplicado' criada (CIRÚRGICA COM SEPARADORES)")
+                    print("   ✅ Aba 'Description_Duplicado' criada (CIRÚRGICA)")
                 except Exception as e:
                     print(f"   ⚠️ Erro na aba Description_Duplicado: {e}")
                     try:
                         DescriptionDuplicadoSheet(df_clean, writer)._criar_aba_vazia()
                     except:
-                        pd.DataFrame({'url': [], 'description': []}).to_excel(writer, sheet_name='Description_Duplicado', index=False)
+                        pd.DataFrame({'url': [], 'description_duplicado': []}).to_excel(writer, sheet_name='Description_Duplicado', index=False)
                 
-                # 12. ABA REDIRECTS 3XX CIRÚRGICA 🆕
+                # 11. ABA HTTP INSEGURO CIRÚRGICA
+                try:
+                    HTTPInseguroSheet(df_clean, writer).export()
+                    print("   ✅ Aba 'HTTP_Inseguro' criada (CIRÚRGICA)")
+                except Exception as e:
+                    print(f"   ⚠️ Erro na aba HTTP_Inseguro: {e}")
+                    try:
+                        HTTPInseguroSheet(df_clean, writer)._criar_aba_vazia()
+                    except:
+                        pd.DataFrame({'url': [], 'link_inseguro': []}).to_excel(writer, sheet_name='HTTP_Inseguro', index=False)
+                
+                # 12. ABA REDIRECTS 3XX CIRÚRGICA
                 try:
                     Redirects3xxSheet(df_clean, writer).export()
                     print("   ✅ Aba 'Redirects_3xx' criada (CIRÚRGICA)")
@@ -280,9 +282,9 @@ def exportar_relatorio_completo(df, df_http, auditorias, output_path):
                     try:
                         Redirects3xxSheet(df_clean, writer)._criar_aba_vazia()
                     except:
-                        pd.DataFrame({'url': [], 'status': [], 'destino': []}).to_excel(writer, sheet_name='Redirects_3xx', index=False)
+                        pd.DataFrame({'url': [], 'status': [], 'redirect': []}).to_excel(writer, sheet_name='Redirects_3xx', index=False)
                 
-                # 13. ABA ERRORS 5XX CIRÚRGICA 🆕
+                # 13. ABA ERRORS 5XX CIRÚRGICA
                 try:
                     Errors5xxSheet(df_clean, writer).export()
                     print("   ✅ Aba 'Errors_5xx' criada (CIRÚRGICA)")
@@ -293,7 +295,7 @@ def exportar_relatorio_completo(df, df_http, auditorias, output_path):
                     except:
                         pd.DataFrame({'url': [], 'status': [], 'erro': []}).to_excel(writer, sheet_name='Errors_5xx', index=False)
                 
-                # 14. ABA ERRORS 4XX CIRÚRGICA 🆕
+                # 14. ABA ERRORS 4XX CIRÚRGICA
                 try:
                     Errors4xxSheet(df_clean, writer).export()
                     print("   ✅ Aba 'Errors_4xx' criada (CIRÚRGICA)")
@@ -304,7 +306,7 @@ def exportar_relatorio_completo(df, df_http, auditorias, output_path):
                     except:
                         pd.DataFrame({'url': [], 'status': [], 'erro': []}).to_excel(writer, sheet_name='Errors_4xx', index=False)
                 
-                # 15. ABA ERRORS HTTP CIRÚRGICA 🆕
+                # 15. ABA ERRORS HTTP CIRÚRGICA
                 try:
                     ErrorsHTTPSheet(df_clean, writer).export()
                     print("   ✅ Aba 'Errors_HTTP' criada (CIRÚRGICA)")
@@ -315,7 +317,7 @@ def exportar_relatorio_completo(df, df_http, auditorias, output_path):
                     except:
                         pd.DataFrame({'url': [], 'erro': []}).to_excel(writer, sheet_name='Errors_HTTP', index=False)
                 
-                # 16. ABA SSL PROBLEMAS CIRÚRGICA 🆕
+                # 16. ABA SSL PROBLEMAS CIRÚRGICA
                 try:
                     SSLProblemasSheet(df_clean, writer).export()
                     print("   ✅ Aba 'SSL_Problemas' criada (CIRÚRGICA)")
@@ -324,47 +326,51 @@ def exportar_relatorio_completo(df, df_http, auditorias, output_path):
                     try:
                         SSLProblemasSheet(df_clean, writer)._criar_aba_vazia()
                     except:
-                        pd.DataFrame({'dominio': [], 'problema': [], 'grade': []}).to_excel(writer, sheet_name='SSL_Problemas', index=False)
-            
-            else:
-                # 📋 FALLBACK BÁSICO
-                print("   🔄 Usando exportação básica...")
+                        pd.DataFrame({'url': [], 'ssl_problema': []}).to_excel(writer, sheet_name='SSL_Problemas', index=False)
                 
-                df_clean.to_excel(writer, sheet_name='Dados_Completos', index=False)
-                print("   ✅ Aba 'Dados_Completos' criada")
-                
-                # Auditorias básicas
-                for nome, df_aud in auditorias_clean.items():
+                # 🔒 17. ABA MIXED CONTENT - SHEET ENGINE SIMPLES
+                try:
+                    MixedContentSheet(df_clean, writer).export()
+                    print("   🔒 Aba 'Mixed_Content' criada (SHEET ENGINE)")
+                except Exception as e:
+                    print(f"   ⚠️ Erro na aba Mixed_Content: {e}")
                     try:
-                        if df_aud is not None and not df_aud.empty:
-                            nome_aba = nome.replace('df_', '').replace('_', ' ').title()[:31]
-                            df_aud.to_excel(writer, sheet_name=nome_aba, index=False)
-                            print(f"   ✅ Aba '{nome_aba}' criada")
-                    except Exception as e_basic:
-                        print(f"   ⚠️ Erro na aba básica {nome}: {e_basic}")
+                        MixedContentSheet(df_clean, writer)._criar_aba_vazia()
+                    except:
+                        pd.DataFrame({'url': [], 'mixed_content_status': [], 'issues': []}).to_excel(writer, sheet_name='Mixed_Content', index=False)
                 
-                # HTTP Inseguro básico
-                if not df_http_clean.empty:
-                    df_http_clean.to_excel(writer, sheet_name='HTTP_Inseguro', index=False)
-                    print("   ✅ Aba 'HTTP_Inseguro' criada")
+            else:
+                # FALLBACK BÁSICO se engines não disponíveis
+                print("🔄 Usando exportação básica (engines não disponíveis)")
+                
+                try:
+                    df_clean.to_excel(writer, sheet_name='Dados_Completos', index=False)
+                    print("   ✅ Aba 'Dados_Completos' criada")
+                except Exception as e:
+                    print(f"   ❌ Erro na criação básica: {e}")
+                    raise
         
-        print(f"\n🎉 RELATÓRIO SEO EXPORTADO - TODAS AS ENGINES CIRÚRGICAS: {output_path}")
-        print(f"🔥 16 ENGINES CIRÚRGICAS ATIVAS:")
-        print(f"   1. Status_HTTP (verificação real)")
-        print(f"   2. Metatags (análise SEO completa)")
-        print(f"   3. Estrutura_Headings (H1 ausente, hierarquia)")
-        print(f"   4. H1_H2_Problemas (duplicação entre páginas)")
-        print(f"   5. Headings_Vazios (lixo estrutural)")
-        print(f"   6. Title_Ausente (tag ausente/vazia)")
-        print(f"   7. Description_Ausente (meta description ausente/vazia)")
-        print(f"   8. Title_Duplicado (com separadores visuais)")
-        print(f"   9. Description_Duplicado (com separadores visuais)")
-        print(f"   10. HTTP_Inseguro (links HTTP em HTTPS)")
-        print(f"   11. Redirects_3xx (301, 302, 307, 308)")
-        print(f"   12. Errors_5xx (500, 502, 503, 504)")
-        print(f"   13. Errors_4xx (400, 403, 404, 410)")
-        print(f"   14. Errors_HTTP (timeouts, DNS, SSL)")
-        print(f"   15. SSL_Problemas (certificados, chain, expiração) 🆕")
+        # 📊 RELATÓRIO FINAL DETALHADO
+        print(f"\n🎉 RELATÓRIO ENTERPRISE CONCLUÍDO!")
+        print(f"📁 Arquivo: {output_path}")
+        print(f"🔧 Engines ativas:")
+        print(f"   1. Resumo (métricas gerais)")
+        print(f"   2. Status_HTTP (verificação real)")
+        print(f"   3. Metatags (análise SEO completa)")
+        print(f"   4. Estrutura_Headings (H1 ausente, hierarquia)")
+        print(f"   5. H1_H2_Problemas (duplicação entre páginas)")
+        print(f"   6. Headings_Vazios (lixo estrutural)")
+        print(f"   7. Title_Ausente (tag ausente/vazia)")
+        print(f"   8. Description_Ausente (meta description ausente/vazia)")
+        print(f"   9. Title_Duplicado (com separadores visuais)")
+        print(f"   10. Description_Duplicado (com separadores visuais)")
+        print(f"   11. HTTP_Inseguro (links HTTP em HTTPS)")
+        print(f"   12. Redirects_3xx (301, 302, 307, 308)")
+        print(f"   13. Errors_5xx (500, 502, 503, 504)")
+        print(f"   14. Errors_4xx (400, 403, 404, 410)")
+        print(f"   15. Errors_HTTP (timeouts, DNS, SSL)")
+        print(f"   16. SSL_Problemas (certificados, chain, expiração)")
+        print(f"   🔒 17. Mixed_Content (recursos HTTP em páginas HTTPS)")
         
         # 🔍 VALIDAÇÃO FINAL
         if os.path.exists(output_path):

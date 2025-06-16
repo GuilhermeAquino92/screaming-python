@@ -12,8 +12,8 @@ from urllib.parse import urlparse
 # 🎯 CONFIGURAÇÃO GLOBAL ENTERPRISE
 # ========================
 
-URL_BASE = "https://ccgsaude.com.br"
-MAX_URLS = 1000
+URL_BASE = "https://ccgsaude.com.br/"
+MAX_URLS = 12000
 MAX_DEPTH = 3
 
 def gerar_nome_arquivo_seguro(url_base):
